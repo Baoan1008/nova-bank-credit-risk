@@ -2,21 +2,16 @@
 
 **[View Live Dashboard →](https://Baoan1008.github.io/nova-bank-credit-risk/nova_bank_powerbi_dashboard.html)**
 
-An end-to-end credit risk analysis project for Nova Bank, a fictional lender operating across the US, UK, and Canada. Built to identify the key drivers of loan default across 32,581 borrowers and develop a practical risk scoring framework.
+An end-to-end credit risk analysis for Nova Bank, a lender operating across the US, UK, and Canada. Built to identify who defaults, why, and how to make smarter lending decisions — while keeping lending fair and accessible.
 
----
-
-## Project Overview
-
-Nova Bank faces a classic lending dilemma: approve too many high-risk loans and lose money; be too restrictive and miss creditworthy customers. This analysis uses real-world-style data to answer who defaults, why, and how to build smarter lending decisions.
-
-**Tools used:** Python (pandas, numpy) · Interactive HTML dashboard (Chart.js) · Excel/CSV · Word report generator (docx.js)
+**Tools:** Python (pandas, numpy) · Interactive HTML Dashboard (Chart.js) · Excel/CSV · Word report generator (docx.js)
 
 ---
 
 ## Key Findings
 
 ### 1. Loan grade is the single strongest default predictor
+
 | Grade | Borrowers | Default Rate |
 |-------|-----------|-------------|
 | A | 10,777 | 10.0% |
@@ -27,9 +22,10 @@ Nova Bank faces a classic lending dilemma: approve too many high-risk loans and 
 | F | 241 | 70.5% |
 | G | 64 | **98.4%** |
 
-Grade D–G loans default at 3–10× the rate of Grade A–B. A strict grade cutoff policy would meaningfully reduce default exposure.
+Grade D–G loans default at 3–10× the rate of Grade A–B.
 
 ### 2. Loan-to-income ratio is the strongest numeric predictor (r = 0.39)
+
 | LTI Ratio | Default Rate |
 |-----------|-------------|
 | < 15% | 12% |
@@ -37,12 +33,14 @@ Grade D–G loans default at 3–10× the rate of Grade A–B. A strict grade cu
 | 25–35% | **42%** |
 | > 35% | **72%** |
 
-Borrowers with LTI above 35% default at 6× the rate of low-LTI borrowers. Other strong predictors: interest rate (r = 0.34), debt-to-income ratio (r = 0.32).
+Borrowers with LTI above 35% default at 6× the rate of low-LTI borrowers.
 
 ### 3. Prior default history doubles default probability
-Borrowers with a prior default on file default at **37.8%** vs **18.4%** for clean-file borrowers — a 2× multiplier regardless of other characteristics.
+
+Borrowers with a prior default on file: **37.8%** vs **18.4%** for clean-file borrowers.
 
 ### 4. Home ownership is a major risk signal
+
 | Ownership | Default Rate |
 |-----------|-------------|
 | Own | 7.5% |
@@ -50,45 +48,59 @@ Borrowers with a prior default on file default at **37.8%** vs **18.4%** for cle
 | Rent | **31.6%** |
 | Other | **30.8%** |
 
-Renters default at 4× the rate of outright owners — likely reflecting both financial stability and commitment to assets.
+Renters default at 4× the rate of outright owners.
 
-### 5. Debt consolidation and medical loans carry the highest risk
-Among loan purposes, debt consolidation (28.6%) and medical loans (26.7%) carry the highest default rates. Venture loans are surprisingly low risk (14.8%), likely reflecting borrower financial confidence.
+### 5. Loan purpose matters
+
+Debt consolidation (28.6%) and medical loans (26.7%) carry the highest default rates. Venture loans are the lowest risk (14.8%).
 
 ### 6. No meaningful geographic difference across US, UK, Canada
-Default rates are nearly identical across countries (21.7–21.9%), suggesting the risk drivers are borrower-level characteristics, not geography.
+
+Default rates: USA 21.9%, UK 21.7%, Canada 21.9%. Risk is in the borrower, not the country.
+
+### 7. Demographics show no bias
+
+Gender, education, and marital status show no meaningful difference in default rates (all within 1%). The model is fair.
 
 ---
 
 ## Risk Scoring Model
 
-A rule-based additive scoring model (0–100) was built using the top predictive factors:
+A rule-based additive scoring model (0–100, higher = safer) built on the top predictive factors:
 
-- Loan grade (most impactful)
-- Loan-to-income ratio
-- Prior default on file
-- Home ownership type
-- Annual income level
-- Interest rate
-
-**Score validation:**
-
-| Risk Tier | Borrowers | Actual Default Rate |
-|-----------|-----------|---------------------|
-| Very Low Risk (80–100) | — | Low |
-| Low Risk (60–80) | — | Moderate |
-| Medium Risk (40–60) | — | Elevated |
-| High Risk (0–40) | — | High |
+| Risk Tier | Score | Borrowers | Actual Default Rate |
+|-----------|-------|-----------|---------------------|
+| Very Low Risk | 81–100 | 20,638 | **7.4%** |
+| Low Risk | 61–80 | 5,837 | 35.8% |
+| Medium Risk | 41–60 | 2,956 | 42.4% |
+| High Risk | 0–40 | 3,150 | **70.8%** |
 
 ---
 
 ## Recommendations for Nova Bank
 
-1. **Implement a hard cap on Grade F/G loans** — 70–98% default rates make these economically unviable without very high interest compensation.
-2. **Set an LTI threshold of 35%** as an automatic flag for enhanced review. Above this level, default probability jumps to 72%.
-3. **Price prior-default borrowers differently** — they carry 2× the risk and should either be declined or offered shorter terms with stricter collateral.
-4. **Develop a rental assistance product** — renters are 4× riskier than owners, but this may reflect lack of assets rather than irresponsibility. A secured or co-signed product could serve this segment safely.
-5. **Use the risk scoring model as a triage tool** — not a final decision, but a fast filter to prioritise manual review on borderline applications.
+### 1. Cut Grade D–G exposure immediately
+Grade D–G is only **15% of the portfolio** but generates **42% of all defaults** — 2,995 bad loans on $34.2M of capital. A hard cap on Grade F/G (where default rates hit 70–98%) and tighter underwriting for Grade D/E would remove the highest-cost segment with minimal impact on approved loan volume. The trade-off is clear: these 4,895 borrowers cost more in defaults than they generate in interest.
+
+### 2. Make LTI > 35% a hard stop, not a soft flag
+Just **7.1% of borrowers** have a loan-to-income ratio above 35%, but they account for **23% of all defaults** and $26.6M in defaulted loan value. Their 72% default rate is 6× the rate of borrowers below 15% LTI. This is the single most actionable policy lever available — a hard cutoff at 35% LTI removes disproportionate risk with minimal loan volume lost.
+
+### 3. Use combined risk signals, not single factors
+Individual factors are useful, but combinations are devastating:
+- **Prior default + Renter** → 46.9% default rate (3,278 borrowers)
+- **Prior default + Grade D–G** → 61.5% default rate (2,489 borrowers)
+- **Clean file + Homeowner/Mortgage** → 9.3% default rate (13,590 borrowers)
+
+Nova Bank should score applicants on combined signals. The clean-file homeowner segment is nearly as safe as Grade A loans and represents a large, underserved opportunity.
+
+### 4. Stop treating "renters" as one risk category
+The 31.6% default rate for renters masks a critical split: renters who are **Grade A/B with LTI below 20%** default at just **7.6%** — comparable to mortgage holders. Meanwhile, renters with LTI above 35% default at **100%** in this dataset. Rejecting all renters loses 6,403 creditworthy borrowers. The fix is to approve renters on grade + LTI, not tenure status.
+
+### 5. Loan purpose risk is driven by grade, not purpose
+Debt consolidation (28.6%) and medical loans (26.7%) appear risky — but when filtered to Grade A/B borrowers, their default rates drop to 14.8% and 14.3% respectively. The purpose is not the risk driver; the grade is. Nova Bank should not restrict loan purpose but should apply grade and LTI standards uniformly across all purposes.
+
+### 6. Deploy the risk scoring model as a first-pass filter
+Rejecting the bottom 9.7% of applicants (High Risk score 0–40) would eliminate **31.4% of all defaults** and protect $27.4M in loan value. The Very Low Risk tier (81–100) — 63% of the portfolio — defaults at just 7.4% and represents $183M in safe loan volume. A tiered approval policy (auto-approve Very Low, review Low/Medium, require collateral for High) would make the process faster and more defensible.
 
 ---
 
@@ -96,11 +108,11 @@ A rule-based additive scoring model (0–100) was built using the top predictive
 
 ```
 nova-bank-credit-risk/
-├── nova_bank_analysis.py          # Full Python analysis (9 sections)
 ├── nova_bank_powerbi_dashboard.html  # Interactive dashboard (Chart.js)
-├── nova_bank_report_generator.js  # Automated Word report builder (docx.js)
-├── credit_risk_enriched.csv       # Enriched dataset with risk scores
-├── Credit_Risk_Dataset.xlsx       # Original dataset (32,581 rows, 29 cols)
+├── nova_bank_analysis.py             # Full Python analysis (9 sections)
+├── nova_bank_report_generator.js     # Automated Word report builder (docx.js)
+├── credit_risk_enriched.csv          # Dataset enriched with risk scores
+├── Credit_Risk_Dataset.xlsx          # Original dataset (32,581 rows, 29 cols)
 └── README.md
 ```
 
@@ -112,10 +124,10 @@ nova-bank-credit-risk/
 # Install dependencies
 pip install pandas numpy openpyxl
 
-# Run full analysis (prints to console)
+# Run full analysis
 python nova_bank_analysis.py
 
-# View dashboard — open in any browser
+# Open dashboard in any browser
 open nova_bank_powerbi_dashboard.html
 
 # Generate Word report
@@ -127,10 +139,7 @@ node nova_bank_report_generator.js
 
 ## Dataset
 
-32,581 personal loan records across the US, UK, and Canada with 29 features including borrower demographics, employment, credit history, loan characteristics, and repayment outcome (`loan_status`: 0 = repaid, 1 = defaulted).
+32,581 personal loan records · US, UK, Canada · 29 features  
+Overall default rate: **21.8%** (7,108 defaults) · Missing: loan_int_rate (9.6%), person_emp_length (2.7%)
 
-Overall default rate: **21.8%** (7,108 defaults)
-
----
-
-*Project completed as part of the Nova Bank Credit Risk Challenge. All data is synthetic/anonymised.*
+*All data is synthetic/anonymised. Project completed as part of the Nova Bank Credit Risk Challenge.*
