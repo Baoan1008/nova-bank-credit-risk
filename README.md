@@ -110,7 +110,6 @@ Rejecting the bottom 9.7% of applicants (High Risk score 0–40) would eliminate
 nova-bank-credit-risk/
 ├── nova_bank_powerbi_dashboard.html  # Interactive dashboard (Chart.js)
 ├── nova_bank_analysis.py             # Full Python analysis (9 sections)
-├── nova_bank_report_generator.js     # Automated Word report builder (docx.js)
 ├── credit_risk_enriched.csv          # Dataset enriched with risk scores
 ├── Credit_Risk_Dataset.xlsx          # Original dataset (32,581 rows, 29 cols)
 └── README.md
