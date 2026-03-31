@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nova Bank — Credit Risk Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --pbi-bg: #F3F2F1; --pbi-panel: #FFFFFF; --pbi-header: #243A5E;
+    --pbi-accent: #0078D4; --pbi-accent2: #217346; --pbi-accent3: #C43E1C; --pbi-accent4: #8764B8;
+    --pbi-text: #323130; --pbi-muted: #605E5C; --pbi-border: #EDEBE9;
+    --pbi-red: #D13438; --pbi-amber: #C39A00; --pbi-green: #107C10; --pbi-blue: #0078D4;
+    --shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--pbi-bg); color: var(--pbi-text); font-size: 13px; min-height: 100vh; }
+  .header { background: var(--pbi-header); color: #fff; padding: 0 20px; height: 44px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); position: sticky; top: 0; z-index: 100; }
+  .header-logo { font-size: 16px; font-weight: 600; letter-spacing: 0.5px; }
+  .header-sub { font-size: 12px; opacity: 0.7; border-left: 1px solid rgba(255,255,255,0.3); padding-left: 16px; }
+  .header-right { margin-left: auto; font-size: 11px; opacity: 0.65; }
+  .filter-bar { background: #fff; border-bottom: 1px solid var(--pbi-border); padding: 8px 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; box-shadow: var(--shadow); }
+  .filter-label { font-size: 11px; font-weight: 600; color: var(--pbi-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .filter-bar select { font-size: 12px; padding: 4px 8px; border: 1px solid #C8C6C4; border-radius: 2px; background: #fff; color: var(--pbi-text); cursor: pointer; }
+  .filter-bar select:focus { outline: 2px solid var(--pbi-accent); }
+  .btn-reset { font-size: 11px; padding: 4px 10px; border: 1px solid var(--pbi-accent); color: var(--pbi-accent); background: transparent; border-radius: 2px; cursor: pointer; margin-left: auto; }
+  .btn-reset:hover { background: #EFF6FC; }
+  .filter-active { border-bottom: 2px solid var(--pbi-accent) !important; }
+  .dashboard { padding: 16px 20px; display: grid; gap: 12px; }
+  .kpi-row { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 10px; }
+  .kpi { background: var(--pbi-panel); border-top: 3px solid var(--pbi-accent); padding: 12px 14px; box-shadow: var(--shadow); border-radius: 2px; }
+  .kpi-label { font-size: 11px; color: var(--pbi-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; }
+  .kpi-value { font-size: 26px; font-weight: 600; line-height: 1; }
+  .kpi-delta { font-size: 11px; margin-top: 4px; color: var(--pbi-muted); }
+  .kpi-red { border-top-color: var(--pbi-red); }
+  .kpi-green { border-top-color: var(--pbi-green); }
+  .kpi-amber { border-top-color: var(--pbi-amber); }
+  .kpi-purple { border-top-color: var(--pbi-accent4); }
+  .row2 { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 10px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .row4 { display: grid; grid-template-columns: 1.6fr 1fr; gap: 10px; }
+  .row5 { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
+  .panel { background: var(--pbi-panel); box-shadow: var(--shadow); border-radius: 2px; padding: 14px 16px; }
+  .panel-title { font-size: 12px; font-weight: 600; color: var(--pbi-text); margin-bottom: 10px; border-bottom: 1px solid var(--pbi-border); padding-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+  .panel-title .icon { width: 14px; height: 14px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
+  .chart-wrap { position: relative; }
+  .hbar-row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+  .hbar-lbl { font-size: 11px; color: var(--pbi-text); min-width: 120px; }
+  .hbar-track { flex: 1; height: 12px; background: var(--pbi-border); border-radius: 1px; overflow: hidden; }
+  .hbar-fill { height: 100%; border-radius: 1px; transition: width .4s; }
+  .hbar-pct { font-size: 11px; color: var(--pbi-muted); min-width: 36px; text-align: right; }
+  .sumtable { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .sumtable th { background: var(--pbi-header); color: #fff; padding: 5px 8px; text-align: left; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .sumtable td { padding: 5px 8px; border-bottom: 1px solid var(--pbi-border); }
+  .sumtable tr:hover td { background: #F3F9FF; }
+  .badge { display: inline-block; padding: 1px 6px; border-radius: 2px; font-size: 10px; font-weight: 600; }
+  .badge-red { background: #FDE7E9; color: var(--pbi-red); }
+  .badge-amber { background: #FFF4CE; color: #7A5000; }
+  .badge-green { background: #DFF6DD; color: var(--pbi-green); }
+  .footer { text-align: center; padding: 12px; font-size: 11px; color: var(--pbi-muted); border-top: 1px solid var(--pbi-border); background: #fff; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <span class="header-logo">&#9646; Nova Bank</span>
+  <span class="header-sub">Credit Risk Dashboard — Loan Portfolio Analysis</span>
+  <span class="header-right">32,581 borrowers &nbsp;|&nbsp; USA &middot; UK &middot; Canada &nbsp;|&nbsp; March 2026</span>
+</div>
+
+<div class="filter-bar" id="filterBar">
+  <span class="filter-label">Filters</span>
+  <select id="f-country" onchange="applyFilters()">
+    <option value="all">Country: All</option>
+    <option value="USA">USA</option>
+    <option value="UK">UK</option>
+    <option value="Canada">Canada</option>
+  </select>
+  <select id="f-grade" onchange="applyFilters()">
+    <option value="all">Grade: All</option>
+    <option value="A">Grade A</option>
+    <option value="B">Grade B</option>
+    <option value="C">Grade C</option>
+    <option value="D">Grade D</option>
+    <option value="E">Grade E</option>
+    <option value="F">Grade F</option>
+    <option value="G">Grade G</option>
+  </select>
+  <select id="f-intent" onchange="applyFilters()">
+    <option value="all">Purpose: All</option>
+    <option value="EDUCATION">Education</option>
+    <option value="MEDICAL">Medical</option>
+    <option value="PERSONAL">Personal</option>
+    <option value="VENTURE">Venture</option>
+    <option value="HOMEIMPROVEMENT">Home Improvement</option>
+    <option value="DEBTCONSOLIDATION">Debt Consolidation</option>
+  </select>
+  <select id="f-ownership" onchange="applyFilters()">
+    <option value="all">Ownership: All</option>
+    <option value="OWN">Own</option>
+    <option value="MORTGAGE">Mortgage</option>
+    <option value="RENT">Rent</option>
+    <option value="OTHER">Other</option>
+  </select>
+  <button class="btn-reset" onclick="resetFilters()">&#10005; Reset filters</button>
+</div>
+
+<div class="dashboard">
+  <div class="kpi-row">
+    <div class="kpi">
+      <div class="kpi-label">Total Borrowers</div>
+      <div class="kpi-value" id="kpi-total">32,581</div>
+      <div class="kpi-delta" id="kpi-total-sub">Full portfolio</div>
+    </div>
+    <div class="kpi kpi-red">
+      <div class="kpi-label">Default Rate</div>
+      <div class="kpi-value" id="kpi-defrate" style="color:var(--pbi-red)">21.8%</div>
+      <div class="kpi-delta" id="kpi-defcount">7,108 defaults</div>
+    </div>
+    <div class="kpi kpi-green">
+      <div class="kpi-label">Avg Income</div>
+      <div class="kpi-value" id="kpi-income" style="color:var(--pbi-green)">$66K</div>
+      <div class="kpi-delta">Average across segment</div>
+    </div>
+    <div class="kpi kpi-amber">
+      <div class="kpi-label">Avg Loan-to-Income</div>
+      <div class="kpi-value" id="kpi-lti" style="color:var(--pbi-amber)">0.17</div>
+      <div class="kpi-delta">Portfolio average</div>
+    </div>
+    <div class="kpi kpi-purple">
+      <div class="kpi-label">Prior Default Flag</div>
+      <div class="kpi-value" id="kpi-prior" style="color:var(--pbi-accent4)">17.6%</div>
+      <div class="kpi-delta">Have default on file</div>
+    </div>
+  </div>
+
+  <div class="row2">
+    <div class="panel">
+      <div class="panel-title"><span class="icon" style="background:var(--pbi-accent)"></span>Default Rate by Loan Grade</div>
+      <div id="grade-bars"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><span class="icon" style="background:var(--pbi-accent3)"></span>Default Rate by Loan Purpose</div>
+      <div id="intent-bars"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><span class="icon" style="background:var(--pbi-accent4)"></span>Borrowers by Home Ownership</div>
+      <div class="chart-wrap" style="height:190px"><canvas id="ownershipChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="row3">
+    <div class="panel">
+      <div class="panel-title"><span class="icon" style="background:var(--pbi-amber)"></span>Default Rate by Interest Rate Band</div>
+      <div class="chart-wrap" style="height:200px"><canvas id="rateChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><span class="icon" style="background:var(--pbi-green)"></span>Default Rate by Income Band</div>
+      <div class="chart-wrap" style="height:200px"><canvas id="incomeChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="row4">
+    <div class="panel">
+      <div class="panel-title"><span class="icon" style="background:var(--pbi-accent)"></span>Risk Score Distribution by Tier</div>
+      <div class="chart-wrap" style="height:220px"><canvas id="tierChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><span class="icon" style="background:var(--pbi-muted)"></span>Demographic Impact on Default</div>
+      <table class="sumtable">
+        <thead><tr><th>Factor</th><th>Category</th><th>Default Rate</th><th>Signal</th></tr></thead>
+        <tbody>
+          <tr><td>Gender</td><td>Male / Female</td><td>21.8% / 21.9%</td><td><span class="badge badge-green">None</span></td></tr>
+          <tr><td>Education</td><td>All levels</td><td>21.2% – 22.2%</td><td><span class="badge badge-green">None</span></td></tr>
+          <tr><td>Marital</td><td>All statuses</td><td>21.4% – 22.0%</td><td><span class="badge badge-green">None</span></td></tr>
+          <tr><td>Age</td><td>18–25 / 55+</td><td>23.0% / 23.9%</td><td><span class="badge badge-amber">Minimal</span></td></tr>
+          <tr><td>Employment</td><td>FT vs Unemployed</td><td>21.6% / 22.7%</td><td><span class="badge badge-amber">Minimal</span></td></tr>
+          <tr><td>Country</td><td>USA/UK/Canada</td><td>~21.7–21.9%</td><td><span class="badge badge-green">None</span></td></tr>
+          <tr><td>Ownership</td><td>Own vs Rent</td><td>7.5% / 31.6%</td><td><span class="badge badge-red">Strong</span></td></tr>
+          <tr><td>Prior Default</td><td>N vs Y</td><td>18.4% / 37.8%</td><td><span class="badge badge-red">Strong</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="row5">
+    <div class="panel">
+      <div class="panel-title"><span class="icon" style="background:var(--pbi-accent)"></span>Default Rate by City</div>
+      <div id="city-bars"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><span class="icon" style="background:var(--pbi-accent2)"></span>Default Rate by Employment Type</div>
+      <div class="chart-wrap" style="height:180px"><canvas id="empChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><span class="icon" style="background:var(--pbi-accent3)"></span>Correlation with Default (Top Factors)</div>
+      <div id="corr-bars"></div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  Nova Bank Credit Risk Dashboard &nbsp;&middot;&nbsp; Data: Credit_Risk_Dataset.xlsx &nbsp;&middot;&nbsp;
+  32,581 borrowers &nbsp;&middot;&nbsp; March 2026 &nbsp;&middot;&nbsp; Confidential
+</div>
+
+<script>
+// ── FULL DATASET ─────────────────────────────────────────────
+const DB = {
+  all: {
+    kpi: { total:32581, defRate:21.8, defCount:7108, income:66, lti:0.17, prior:17.6 },
+    grades:  [{l:"A",r:10.0,c:"#107C10"},{l:"B",r:16.3,c:"#217346"},{l:"C",r:20.7,c:"#C39A00"},{l:"D",r:59.0,c:"#C43E1C"},{l:"E",r:64.4,c:"#D13438"},{l:"F",r:70.5,c:"#A4262C"},{l:"G",r:98.4,c:"#750B1C"}],
+    intents: [{l:"Venture",r:14.8},{l:"Education",r:17.2},{l:"Personal",r:19.9},{l:"Home Improvement",r:26.1},{l:"Medical",r:26.7},{l:"Debt Consolidation",r:28.6}],
+    ownership:[{l:"Rent",n:16446,r:31.6},{l:"Mortgage",n:13444,r:12.6},{l:"Own",n:2584,r:7.5},{l:"Other",n:107,r:30.8}],
+    rates:   [{l:"<8%",r:9.3},{l:"8–11%",r:15.3},{l:"11–14%",r:19.6},{l:"14–17%",r:49.3},{l:">17%",r:67.7}],
+    income:  [{l:"<$30K",r:45.5},{l:"$30–50K",r:25.6},{l:"$50–80K",r:17.4},{l:"$80–150K",r:9.3},{l:">$150K",r:9.9}],
+    tiers:   [{l:"High Risk (0–40)",n:2979,r:69.7,c:"#D13438"},{l:"Medium Risk (41–60)",n:2956,r:42.4,c:"#C39A00"},{l:"Low Risk (61–80)",n:5837,r:35.8,c:"#0078D4"},{l:"Very Low Risk (81–100)",n:20638,r:7.4,c:"#107C10"}],
+    cities:  [{l:"Vancouver",r:24.2},{l:"Dallas",r:23.6},{l:"Edinburgh",r:23.5},{l:"Los Angeles",r:22.9},{l:"Manchester",r:22.5},{l:"Toronto",r:21.9},{l:"San Francisco",r:21.8},{l:"London",r:21.1},{l:"Houston",r:20.9},{l:"Swansea",r:20.4}],
+    employment:[{l:"Unemployed",r:22.7},{l:"Self-employed",r:22.5},{l:"Part-time",r:21.8},{l:"Full-time",r:21.6}],
+    corr:    [{l:"Loan-to-income ratio",v:0.386},{l:"Loan % of income",v:0.379},{l:"Interest rate",v:0.335},{l:"Debt-to-income ratio",v:0.322},{l:"Loan amount",v:0.105},{l:"Annual income (neg.)",v:0.144}]
+  },
+  USA: {
+    kpi: { total:10852, defRate:21.9, defCount:2372, income:66, lti:0.17, prior:17.6 },
+    grades:  [{l:"A",r:9.9,c:"#107C10"},{l:"B",r:15.2,c:"#217346"},{l:"C",r:21.1,c:"#C39A00"},{l:"D",r:60.8,c:"#C43E1C"},{l:"E",r:66.1,c:"#D13438"},{l:"F",r:78.9,c:"#A4262C"},{l:"G",r:96.0,c:"#750B1C"}],
+    intents: [{l:"Venture",r:15.0},{l:"Education",r:17.7},{l:"Personal",r:19.7},{l:"Home Improvement",r:26.3},{l:"Medical",r:26.7},{l:"Debt Consolidation",r:28.3}],
+    ownership:[{l:"Rent",n:5491,r:31.8},{l:"Mortgage",n:4488,r:12.4},{l:"Own",n:840,r:7.3},{l:"Other",n:33,r:30.3}],
+    rates:   [{l:"<8%",r:9.1},{l:"8–11%",r:15.0},{l:"11–14%",r:19.8},{l:"14–17%",r:50.1},{l:">17%",r:68.2}],
+    income:  [{l:"<$30K",r:46.1},{l:"$30–50K",r:25.9},{l:"$50–80K",r:17.1},{l:"$80–150K",r:9.0},{l:">$150K",r:9.7}],
+    tiers:   [{l:"High Risk (0–40)",n:995,r:70.1,c:"#D13438"},{l:"Medium Risk (41–60)",n:985,r:42.8,c:"#C39A00"},{l:"Low Risk (61–80)",n:1946,r:36.0,c:"#0078D4"},{l:"Very Low Risk (81–100)",n:6873,r:7.5,c:"#107C10"}],
+    cities:  [{l:"Dallas",r:23.6},{l:"Los Angeles",r:22.9},{l:"San Francisco",r:21.8},{l:"Houston",r:20.9},{l:"New York",r:22.1},{l:"Chicago",r:21.5}],
+    employment:[{l:"Unemployed",r:23.0},{l:"Self-employed",r:22.7},{l:"Part-time",r:21.9},{l:"Full-time",r:21.7}],
+    corr:    [{l:"Loan-to-income ratio",v:0.389},{l:"Loan % of income",v:0.381},{l:"Interest rate",v:0.337},{l:"Debt-to-income ratio",v:0.325},{l:"Loan amount",v:0.108},{l:"Annual income (neg.)",v:0.146}]
+  },
+  UK: {
+    kpi: { total:10944, defRate:21.7, defCount:2378, income:66, lti:0.17, prior:17.5 },
+    grades:  [{l:"A",r:10.2,c:"#107C10"},{l:"B",r:16.6,c:"#217346"},{l:"C",r:19.7,c:"#C39A00"},{l:"D",r:59.9,c:"#C43E1C"},{l:"E",r:64.1,c:"#D13438"},{l:"F",r:68.5,c:"#A4262C"},{l:"G",r:100.0,c:"#750B1C"}],
+    intents: [{l:"Venture",r:15.2},{l:"Education",r:16.9},{l:"Personal",r:19.6},{l:"Home Improvement",r:24.4},{l:"Medical",r:27.2},{l:"Debt Consolidation",r:28.5}],
+    ownership:[{l:"Rent",n:5524,r:31.4},{l:"Mortgage",n:4502,r:12.7},{l:"Own",n:879,r:7.6},{l:"Other",n:39,r:31.0}],
+    rates:   [{l:"<8%",r:9.2},{l:"8–11%",r:15.4},{l:"11–14%",r:19.4},{l:"14–17%",r:48.9},{l:">17%",r:67.3}],
+    income:  [{l:"<$30K",r:45.2},{l:"$30–50K",r:25.3},{l:"$50–80K",r:17.6},{l:"$80–150K",r:9.5},{l:">$150K",r:10.1}],
+    tiers:   [{l:"High Risk (0–40)",n:994,r:69.4,c:"#D13438"},{l:"Medium Risk (41–60)",n:987,r:42.1,c:"#C39A00"},{l:"Low Risk (61–80)",n:1946,r:35.6,c:"#0078D4"},{l:"Very Low Risk (81–100)",n:6924,r:7.3,c:"#107C10"}],
+    cities:  [{l:"Edinburgh",r:23.5},{l:"Manchester",r:22.5},{l:"London",r:21.1},{l:"Swansea",r:20.4},{l:"Birmingham",r:22.0},{l:"Leeds",r:21.8}],
+    employment:[{l:"Unemployed",r:22.5},{l:"Self-employed",r:22.3},{l:"Part-time",r:21.7},{l:"Full-time",r:21.5}],
+    corr:    [{l:"Loan-to-income ratio",v:0.383},{l:"Loan % of income",v:0.377},{l:"Interest rate",v:0.333},{l:"Debt-to-income ratio",v:0.319},{l:"Loan amount",v:0.103},{l:"Annual income (neg.)",v:0.142}]
+  },
+  Canada: {
+    kpi: { total:10785, defRate:21.9, defCount:2358, income:66, lti:0.17, prior:17.8 },
+    grades:  [{l:"A",r:9.8,c:"#107C10"},{l:"B",r:17.0,c:"#217346"},{l:"C",r:21.5,c:"#C39A00"},{l:"D",r:56.5,c:"#C43E1C"},{l:"E",r:62.9,c:"#D13438"},{l:"F",r:65.4,c:"#A4262C"},{l:"G",r:100.0,c:"#750B1C"}],
+    intents: [{l:"Venture",r:14.2},{l:"Education",r:17.1},{l:"Personal",r:20.4},{l:"Home Improvement",r:27.7},{l:"Medical",r:26.2},{l:"Debt Consolidation",r:28.9}],
+    ownership:[{l:"Rent",n:5431,r:31.5},{l:"Mortgage",n:4454,r:12.7},{l:"Own",n:865,r:7.7},{l:"Other",n:35,r:31.4}],
+    rates:   [{l:"<8%",r:9.5},{l:"8–11%",r:15.5},{l:"11–14%",r:19.5},{l:"14–17%",r:49.1},{l:">17%",r:67.6}],
+    income:  [{l:"<$30K",r:45.9},{l:"$30–50K",r:25.5},{l:"$50–80K",r:17.5},{l:"$80–150K",r:9.4},{l:">$150K",r:9.8}],
+    tiers:   [{l:"High Risk (0–40)",n:990,r:70.0,c:"#D13438"},{l:"Medium Risk (41–60)",n:984,r:42.4,c:"#C39A00"},{l:"Low Risk (61–80)",n:1945,r:35.8,c:"#0078D4"},{l:"Very Low Risk (81–100)",n:6841,r:7.5,c:"#107C10"}],
+    cities:  [{l:"Vancouver",r:24.2},{l:"Toronto",r:21.9},{l:"Calgary",r:22.4},{l:"Ottawa",r:21.5},{l:"Montreal",r:22.1},{l:"Edmonton",r:21.7}],
+    employment:[{l:"Unemployed",r:23.1},{l:"Self-employed",r:22.6},{l:"Part-time",r:21.9},{l:"Full-time",r:21.6}],
+    corr:    [{l:"Loan-to-income ratio",v:0.388},{l:"Loan % of income",v:0.380},{l:"Interest rate",v:0.336},{l:"Debt-to-income ratio",v:0.323},{l:"Loan amount",v:0.106},{l:"Annual income (neg.)",v:0.145}]
+  }
+};
+
+// Grade-level KPI overrides
+const GRADE_KPI = {
+  A:{total:10777,defRate:10.0,defCount:1073,income:67,lti:0.15,prior:0.0},
+  B:{total:10451,defRate:16.3,defCount:1701,income:66,lti:0.18,prior:0.0},
+  C:{total:6458, defRate:20.7,defCount:1339,income:65,lti:0.17,prior:50.4},
+  D:{total:3626, defRate:59.0,defCount:2141,income:64,lti:0.19,prior:51.7},
+  E:{total:964,  defRate:64.4,defCount:621, income:71,lti:0.21,prior:48.2},
+  F:{total:241,  defRate:70.5,defCount:170, income:77,lti:0.22,prior:46.5},
+  G:{total:64,   defRate:98.4,defCount:63,  income:77,lti:0.25,prior:56.2}
+};
+
+let charts = {};
+
+function barColor(r) {
+  if (r >= 50) return "#D13438";
+  if (r >= 30) return "#C43E1C";
+  if (r >= 20) return "#C39A00";
+  return "#107C10";
+}
+
+function renderHBars(id, data, max=100, lw=120) {
+  document.getElementById(id).innerHTML = data.map(d =>
+    `<div class="hbar-row">
+      <span class="hbar-lbl" style="min-width:${lw}px">${d.l}</span>
+      <div class="hbar-track"><div class="hbar-fill" style="width:${(d.r/max*100).toFixed(1)}%;background:${barColor(d.r)}"></div></div>
+      <span class="hbar-pct">${d.r.toFixed(1)}%</span>
+    </div>`).join('');
+}
+
+function renderCorrBars(id, data) {
+  const max = Math.max(...data.map(d => d.v));
+  document.getElementById(id).innerHTML = data.map(d =>
+    `<div class="hbar-row">
+      <span class="hbar-lbl" style="min-width:150px;font-size:10px">${d.l}</span>
+      <div class="hbar-track"><div class="hbar-fill" style="width:${(d.v/max*100).toFixed(1)}%;background:#0078D4"></div></div>
+      <span class="hbar-pct">${d.v.toFixed(3)}</span>
+    </div>`).join('');
+}
+
+function destroyChart(id) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+}
+
+function buildOwnership(data) {
+  destroyChart("ownershipChart");
+  charts["ownershipChart"] = new Chart(document.getElementById("ownershipChart"), {
+    type: "doughnut",
+    data: { labels: data.map(d=>d.l), datasets: [{ data: data.map(d=>d.n),
+      backgroundColor:["#D13438","#0078D4","#107C10","#C39A00"], borderWidth:2, borderColor:"#fff" }] },
+    options: { responsive:true, maintainAspectRatio:false, cutout:"62%",
+      plugins: { legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${ctx.parsed.toLocaleString()} (${data[ctx.dataIndex].r}% default)`}} } }
+  });
+}
+
+function buildBarChart(id, data, maxY=80) {
+  destroyChart(id);
+  charts[id] = new Chart(document.getElementById(id), {
+    type:"bar",
+    data:{ labels:data.map(d=>d.l), datasets:[{ label:"Default rate (%)", data:data.map(d=>d.r),
+      backgroundColor:data.map(d=>barColor(d.r)), borderRadius:2 }] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{ y:{beginAtZero:true,max:maxY,ticks:{callback:v=>v+"%",font:{size:10}},grid:{color:"#F3F2F1"}},
+               x:{ticks:{font:{size:10}},grid:{display:false}} } }
+  });
+}
+
+function buildLineChart(id, data) {
+  destroyChart(id);
+  charts[id] = new Chart(document.getElementById(id), {
+    type:"line",
+    data:{ labels:data.map(d=>d.l), datasets:[{ label:"Default rate (%)", data:data.map(d=>d.r),
+      borderColor:"#0078D4", backgroundColor:"rgba(0,120,212,0.08)",
+      pointBackgroundColor:"#0078D4", pointRadius:4, fill:true, tension:0.3 }] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{ y:{beginAtZero:true,ticks:{callback:v=>v+"%",font:{size:10}},grid:{color:"#F3F2F1"}},
+               x:{ticks:{font:{size:10}},grid:{display:false}} } }
+  });
+}
+
+function buildTierChart(data) {
+  destroyChart("tierChart");
+  charts["tierChart"] = new Chart(document.getElementById("tierChart"), {
+    type:"bar",
+    data:{ labels:data.map(d=>d.l), datasets:[
+      { label:"Borrowers", data:data.map(d=>d.n), backgroundColor:data.map(d=>d.c+"33"),
+        borderColor:data.map(d=>d.c), borderWidth:1.5, borderRadius:2, yAxisID:"y" },
+      { label:"Default rate (%)", data:data.map(d=>d.r), type:"line",
+        borderColor:"#323130", pointBackgroundColor:"#323130", pointRadius:4,
+        fill:false, yAxisID:"y2", tension:0.1 }
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>ctx.datasetIndex===0?` ${ctx.parsed.y.toLocaleString()} borrowers`:` ${ctx.parsed.y}% default rate`}} },
+      scales:{
+        y: {beginAtZero:true, ticks:{callback:v=>v.toLocaleString(),font:{size:10}}, grid:{color:"#F3F2F1"}},
+        y2:{beginAtZero:true,max:80,position:"right",ticks:{callback:v=>v+"%",font:{size:10}},grid:{display:false}},
+        x: {ticks:{font:{size:10}},grid:{display:false}}
+      }}
+  });
+}
+
+function buildHBarChart(id, data, maxY=30) {
+  destroyChart(id);
+  charts[id] = new Chart(document.getElementById(id), {
+    type:"bar",
+    data:{ labels:data.map(d=>d.l), datasets:[{ data:data.map(d=>d.r),
+      backgroundColor:"#C39A00", borderRadius:2 }] },
+    options:{ indexAxis:"y", responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>` ${ctx.parsed.x.toFixed(1)}% default rate`}}},
+      scales:{ x:{beginAtZero:true,max:maxY,ticks:{callback:v=>v+"%",font:{size:10}},grid:{color:"#F3F2F1"}},
+               y:{ticks:{font:{size:11}},grid:{display:false}} } }
+  });
+}
+
+function updateKPIs(kpi, label) {
+  document.getElementById("kpi-total").textContent    = kpi.total.toLocaleString();
+  document.getElementById("kpi-total-sub").textContent= label || "Full portfolio";
+  document.getElementById("kpi-defrate").textContent  = kpi.defRate.toFixed(1)+"%";
+  document.getElementById("kpi-defcount").textContent = kpi.defCount.toLocaleString()+" defaults";
+  document.getElementById("kpi-income").textContent   = "$"+kpi.income+"K";
+  document.getElementById("kpi-lti").textContent      = kpi.lti.toFixed(2);
+  document.getElementById("kpi-prior").textContent    = kpi.prior.toFixed(1)+"%";
+}
+
+function renderAll(d, kpi, label) {
+  updateKPIs(kpi, label);
+  renderHBars("grade-bars",  d.grades,  100, 40);
+  renderHBars("intent-bars", d.intents, 35,  150);
+  renderHBars("city-bars",   d.cities,  30,  120);
+  renderCorrBars("corr-bars", d.corr);
+  buildOwnership(d.ownership);
+  buildBarChart("rateChart",   d.rates,  80);
+  buildLineChart("incomeChart", d.income);
+  buildTierChart(d.tiers);
+  buildHBarChart("empChart", d.employment, 30);
+}
+
+function applyFilters() {
+  const country = document.getElementById("f-country").value;
+  const grade   = document.getElementById("f-grade").value;
+  const active  = country !== "all" || grade !== "all";
+
+  document.getElementById("filterBar").classList.toggle("filter-active", active);
+
+  const base = DB[country] || DB.all;
+
+  // If a specific grade is selected, override KPIs and filter grade bars
+  if (grade !== "all") {
+    const gkpi = GRADE_KPI[grade];
+    const kpi = {
+      total:   gkpi.total,
+      defRate: gkpi.defRate,
+      defCount:gkpi.defCount,
+      income:  gkpi.income,
+      lti:     gkpi.lti,
+      prior:   gkpi.prior
+    };
+    // Show only selected grade bar
+    const filteredGrades = base.grades.filter(g => g.l === grade);
+    const d = Object.assign({}, base, { grades: filteredGrades });
+    renderAll(d, kpi, `Grade ${grade} segment`);
+  } else {
+    renderAll(base, base.kpi, country !== "all" ? country+" portfolio" : "Full portfolio");
+  }
+}
+
+function resetFilters() {
+  ["f-country","f-grade","f-intent","f-ownership"].forEach(id =>
+    document.getElementById(id).value = "all");
+  document.getElementById("filterBar").classList.remove("filter-active");
+  renderAll(DB.all, DB.all.kpi, "Full portfolio");
+}
+
+window.addEventListener("load", () => renderAll(DB.all, DB.all.kpi, "Full portfolio"));
+</script>
+</body>
+</html>
