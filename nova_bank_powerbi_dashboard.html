@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nova Bank — Credit Risk Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #F3F2F1; --panel: #FFFFFF; --header: #243A5E;
+    --blue: #0078D4; --green: #107C10; --red: #D13438;
+    --amber: #C39A00; --purple: #8764B8; --teal: #217346;
+    --orange: #C43E1C; --text: #323130; --muted: #605E5C;
+    --border: #EDEBE9; --shadow: 0 1px 3px rgba(0,0,0,0.10);
+  }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 13px; }
+  .header { background: var(--header); color: #fff; padding: 0 20px; height: 44px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); position: sticky; top: 0; z-index: 100; }
+  .header-logo { font-size: 16px; font-weight: 600; }
+  .header-sub { font-size: 12px; opacity: 0.7; border-left: 1px solid rgba(255,255,255,0.3); padding-left: 16px; }
+  .header-right { margin-left: auto; font-size: 11px; opacity: 0.65; }
+  .filter-bar { background: #fff; border-bottom: 1px solid var(--border); padding: 8px 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; box-shadow: var(--shadow); }
+  .filter-bar.active { border-bottom: 2px solid var(--blue); }
+  .filter-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .filter-bar select { font-size: 12px; padding: 4px 8px; border: 1px solid #C8C6C4; border-radius: 2px; background: #fff; color: var(--text); cursor: pointer; }
+  .btn-reset { font-size: 11px; padding: 4px 10px; border: 1px solid var(--blue); color: var(--blue); background: transparent; border-radius: 2px; cursor: pointer; margin-left: auto; }
+  .btn-reset:hover { background: #EFF6FC; }
+  .dash { padding: 14px 20px; display: grid; gap: 10px; }
+  .kpi-row { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 10px; }
+  .kpi { background: var(--panel); border-top: 3px solid var(--blue); padding: 12px 14px; box-shadow: var(--shadow); border-radius: 2px; }
+  .kpi.red    { border-top-color: var(--red); }
+  .kpi.green  { border-top-color: var(--green); }
+  .kpi.amber  { border-top-color: var(--amber); }
+  .kpi.purple { border-top-color: var(--purple); }
+  .kpi-label { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; }
+  .kpi-value { font-size: 26px; font-weight: 600; line-height: 1; }
+  .kpi-sub   { font-size: 11px; margin-top: 4px; color: var(--muted); }
+  .row2 { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 10px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .row4 { display: grid; grid-template-columns: 1.6fr 1fr; gap: 10px; }
+  .row5 { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; }
+  .panel { background: var(--panel); box-shadow: var(--shadow); border-radius: 2px; padding: 14px 16px; }
+  .ptitle { font-size: 12px; font-weight: 600; margin-bottom: 10px; border-bottom: 1px solid var(--border); padding-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+  .ptitle .dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+  .cw { position: relative; }
+  .hrow { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+  .hlbl { font-size: 11px; min-width: 130px; }
+  .htrack { flex:1; height: 12px; background: var(--border); border-radius: 1px; overflow: hidden; }
+  .hfill  { height: 100%; border-radius: 1px; transition: width .4s; }
+  .hpct  { font-size: 11px; color: var(--muted); min-width: 38px; text-align: right; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 8px; font-size: 11px; }
+  .legend-item { display: flex; align-items: center; gap: 4px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .stable { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .stable th { background: var(--header); color: #fff; padding: 5px 8px; text-align: left; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+  .stable td { padding: 5px 8px; border-bottom: 1px solid var(--border); }
+  .stable tr:hover td { background: #F3F9FF; }
+  .badge { display: inline-block; padding: 1px 6px; border-radius: 2px; font-size: 10px; font-weight: 600; }
+  .b-red    { background: #FDE7E9; color: var(--red); }
+  .b-amber  { background: #FFF4CE; color: #7A5000; }
+  .b-green  { background: #DFF6DD; color: var(--green); }
+  .footer { text-align: center; padding: 10px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--border); background: #fff; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <span class="header-logo">&#9646; Nova Bank</span>
+  <span class="header-sub">Credit Risk Dashboard — Loan Portfolio Analysis</span>
+  <span class="header-right">32,581 borrowers &nbsp;|&nbsp; USA &middot; UK &middot; Canada &nbsp;|&nbsp; 2026</span>
+</div>
+
+<div class="filter-bar" id="fbar">
+  <span class="filter-label">Filters</span>
+  <select id="f-country" onchange="applyFilters()">
+    <option value="all">Country: All</option>
+    <option value="USA">USA</option>
+    <option value="UK">UK</option>
+    <option value="Canada">Canada</option>
+  </select>
+  <select id="f-grade" onchange="applyFilters()">
+    <option value="all">Grade: All</option>
+    <option value="A">Grade A</option><option value="B">Grade B</option>
+    <option value="C">Grade C</option><option value="D">Grade D</option>
+    <option value="E">Grade E</option><option value="F">Grade F</option>
+    <option value="G">Grade G</option>
+  </select>
+  <select id="f-intent" onchange="applyFilters()">
+    <option value="all">Purpose: All</option>
+    <option value="VENTURE">Venture</option>
+    <option value="EDUCATION">Education</option>
+    <option value="PERSONAL">Personal</option>
+    <option value="HOMEIMPROVEMENT">Home Improvement</option>
+    <option value="MEDICAL">Medical</option>
+    <option value="DEBTCONSOLIDATION">Debt Consolidation</option>
+  </select>
+  <select id="f-ownership" onchange="applyFilters()">
+    <option value="all">Ownership: All</option>
+    <option value="OWN">Own</option>
+    <option value="MORTGAGE">Mortgage</option>
+    <option value="RENT">Rent</option>
+    <option value="OTHER">Other</option>
+  </select>
+  <button class="btn-reset" onclick="resetFilters()">&#10005; Reset</button>
+</div>
+
+<div class="dash">
+  <!-- KPIs -->
+  <div class="kpi-row">
+    <div class="kpi">
+      <div class="kpi-label">Total Borrowers</div>
+      <div class="kpi-value" id="kpi-total">32,581</div>
+      <div class="kpi-sub" id="kpi-total-sub">Full portfolio</div>
+    </div>
+    <div class="kpi red">
+      <div class="kpi-label">Default Rate</div>
+      <div class="kpi-value" id="kpi-dr" style="color:var(--red)">21.8%</div>
+      <div class="kpi-sub" id="kpi-dc">7,108 defaults</div>
+    </div>
+    <div class="kpi green">
+      <div class="kpi-label">Avg Income</div>
+      <div class="kpi-value" id="kpi-inc" style="color:var(--green)">$66K</div>
+      <div class="kpi-sub">Avg across segment</div>
+    </div>
+    <div class="kpi amber">
+      <div class="kpi-label">Avg Loan-to-Income</div>
+      <div class="kpi-value" id="kpi-lti" style="color:var(--amber)">0.17</div>
+      <div class="kpi-sub">Portfolio average</div>
+    </div>
+    <div class="kpi purple">
+      <div class="kpi-label">Prior Default Flag</div>
+      <div class="kpi-value" id="kpi-prior" style="color:var(--purple)">17.6%</div>
+      <div class="kpi-sub">Have default on file</div>
+    </div>
+  </div>
+
+  <!-- Row 2 -->
+  <div class="row2">
+    <div class="panel">
+      <div class="ptitle"><span class="dot" style="background:var(--blue)"></span>Default Rate by Loan Grade</div>
+      <div id="grade-bars"></div>
+    </div>
+    <div class="panel">
+      <div class="ptitle"><span class="dot" style="background:var(--orange)"></span>Default Rate by Loan Purpose</div>
+      <div id="intent-bars"></div>
+    </div>
+    <div class="panel">
+      <div class="ptitle"><span class="dot" style="background:var(--purple)"></span>Borrowers by Home Ownership</div>
+      <div class="cw" style="height:150px"><canvas id="ownerChart"></canvas></div>
+      <div class="legend" id="own-legend"></div>
+    </div>
+  </div>
+
+  <!-- Row 3 -->
+  <div class="row3">
+    <div class="panel">
+      <div class="ptitle"><span class="dot" style="background:var(--amber)"></span>Default Rate by Interest Rate Band</div>
+      <div class="cw" style="height:190px"><canvas id="rateChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="ptitle"><span class="dot" style="background:var(--green)"></span>Default Rate by Income Band</div>
+      <div class="cw" style="height:190px"><canvas id="incChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Row 4 -->
+  <div class="row4">
+    <div class="panel">
+      <div class="ptitle"><span class="dot" style="background:var(--blue)"></span>Risk Score Distribution by Tier</div>
+      <div class="cw" style="height:210px"><canvas id="tierChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="ptitle"><span class="dot" style="background:var(--muted)"></span>Demographic Fairness &amp; Key Signals</div>
+      <table class="stable">
+        <thead><tr><th>Factor</th><th>Category</th><th>Default Rate</th><th>Signal</th></tr></thead>
+        <tbody>
+          <tr><td>Gender</td><td>Male / Female</td><td>21.8% / 21.9%</td><td><span class="badge b-green">None</span></td></tr>
+          <tr><td>Education</td><td>All levels</td><td>21.2% – 22.2%</td><td><span class="badge b-green">None</span></td></tr>
+          <tr><td>Marital status</td><td>All statuses</td><td>21.4% – 22.0%</td><td><span class="badge b-green">None</span></td></tr>
+          <tr><td>Country</td><td>USA / UK / Canada</td><td>21.7% – 21.9%</td><td><span class="badge b-green">None</span></td></tr>
+          <tr><td>Age group</td><td>18–25 / 55+</td><td>23.0% / 23.0%</td><td><span class="badge b-amber">Minimal</span></td></tr>
+          <tr><td>Home ownership</td><td>Own vs Rent</td><td>7.5% / 31.6%</td><td><span class="badge b-red">Strong</span></td></tr>
+          <tr><td>Prior default</td><td>No vs Yes</td><td>18.4% / 37.8%</td><td><span class="badge b-red">Strong</span></td></tr>
+          <tr><td>Loan grade</td><td>A vs D–G</td><td>10.0% / 59–98%</td><td><span class="badge b-red">Strongest</span></td></tr>
+        </tbody>
+      </table>
+      <div style="margin-top:10px;font-size:10px;color:var(--muted);border-top:1px solid var(--border);padding-top:6px;line-height:1.6">
+        <strong style="color:var(--text)">Key insight:</strong> Gender, education, marital status and country show no meaningful difference in default rates — the model is fair. Risk is driven entirely by financial characteristics: grade, LTI ratio, and prior default history.
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 5 -->
+  <div class="row5">
+    <div class="panel">
+      <div class="ptitle"><span class="dot" style="background:var(--blue)"></span>Default Rate by City</div>
+      <div id="city-bars"></div>
+    </div>
+    <div class="panel">
+      <div class="ptitle"><span class="dot" style="background:var(--teal)"></span>Default Rate by Employment Type</div>
+      <div class="cw" style="height:170px"><canvas id="empChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="ptitle"><span class="dot" style="background:var(--orange)"></span>Correlation with Default (Top Factors)</div>
+      <div id="corr-bars"></div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  Nova Bank Credit Risk Dashboard &nbsp;&middot;&nbsp; Source: Credit_Risk_Dataset.xlsx &nbsp;&middot;&nbsp; 32,581 borrowers &nbsp;&middot;&nbsp; 2026 &nbsp;&middot;&nbsp; Thi Bao An Nguyen
+</div>
+
+<script>
+// ── ALL DATA — 100% VERIFIED FROM RAW EXCEL ──────────────────
+const OWN_COLORS = ["#D13438","#0078D4","#107C10","#C39A00"];
+
+const DB = {
+  all: {
+    kpi: { total:32581, dr:21.8, dc:7108, inc:66, lti:0.17, prior:17.6, label:"Full portfolio" },
+    grades: [
+      {l:"A",r:10.0,c:"#107C10"},{l:"B",r:16.3,c:"#217346"},
+      {l:"C",r:20.7,c:"#C39A00"},{l:"D",r:59.0,c:"#C43E1C"},
+      {l:"E",r:64.4,c:"#D13438"},{l:"F",r:70.5,c:"#A4262C"},{l:"G",r:98.4,c:"#750B1C"}
+    ],
+    intents: [
+      {l:"Venture",r:14.8},{l:"Education",r:17.2},{l:"Personal",r:19.9},
+      {l:"Home Improvement",r:26.1},{l:"Medical",r:26.7},{l:"Debt Consolidation",r:28.6}
+    ],
+    ownership: [
+      {l:"Rent",n:16446,r:31.6},{l:"Mortgage",n:13444,r:12.6},
+      {l:"Own",n:2584,r:7.5},{l:"Other",n:107,r:30.8}
+    ],
+    rates: [
+      {l:"<8%",r:9.3},{l:"8–11%",r:15.3},{l:"11–14%",r:19.6},
+      {l:"14–17%",r:49.3},{l:">17%",r:67.7}
+    ],
+    income: [
+      {l:"<$30K",r:45.5},{l:"$30–50K",r:25.6},{l:"$50–80K",r:17.4},
+      {l:"$80–150K",r:9.3},{l:">$150K",r:9.9}
+    ],
+    tiers: [
+      {l:"High Risk (0–40)",n:3150,r:70.8,c:"#D13438"},
+      {l:"Medium Risk (41–60)",n:2956,r:42.4,c:"#C39A00"},
+      {l:"Low Risk (61–80)",n:5837,r:35.8,c:"#0078D4"},
+      {l:"Very Low Risk (81–100)",n:20638,r:7.4,c:"#107C10"}
+    ],
+    cities: [
+      {l:"Vancouver",r:24.2},{l:"Dallas",r:23.6},{l:"Edinburgh",r:23.5},
+      {l:"Los Angeles",r:22.9},{l:"Manchester",r:22.5},{l:"Toronto",r:22.0},
+      {l:"Montreal",r:21.9},{l:"San Francisco",r:21.8},{l:"Ottawa",r:21.8},
+      {l:"Glasgow",r:21.6}
+    ],
+    employment: [
+      {l:"Unemployed",r:22.7},{l:"Self-employed",r:22.5},
+      {l:"Part-time",r:21.8},{l:"Full-time",r:21.6}
+    ],
+    corr: [
+      {l:"Loan-to-income ratio",v:0.386},{l:"Loan % of income",v:0.379},
+      {l:"Interest rate",v:0.335},{l:"Debt-to-income ratio",v:0.322},
+      {l:"Loan amount",v:0.105},{l:"Annual income (neg.)",v:0.144}
+    ]
+  },
+  USA: {
+    kpi: { total:10852, dr:21.9, dc:2372, inc:66, lti:0.17, prior:17.6, label:"USA portfolio" },
+    grades: [
+      {l:"A",r:9.9,c:"#107C10"},{l:"B",r:15.2,c:"#217346"},
+      {l:"C",r:21.1,c:"#C39A00"},{l:"D",r:60.8,c:"#C43E1C"},
+      {l:"E",r:66.1,c:"#D13438"},{l:"F",r:78.9,c:"#A4262C"},{l:"G",r:96.0,c:"#750B1C"}
+    ],
+    intents: [
+      {l:"Venture",r:15.0},{l:"Education",r:17.7},{l:"Personal",r:19.7},
+      {l:"Home Improvement",r:26.3},{l:"Medical",r:26.7},{l:"Debt Consolidation",r:28.3}
+    ],
+    ownership: [
+      {l:"Rent",n:5491,r:31.3},{l:"Mortgage",n:4488,r:12.8},
+      {l:"Own",n:840,r:8.1},{l:"Other",n:33,r:42.4}
+    ],
+    rates: [
+      {l:"<8%",r:9.7},{l:"8–11%",r:14.0},{l:"11–14%",r:19.6},
+      {l:"14–17%",r:50.0},{l:">17%",r:71.9}
+    ],
+    income: [
+      {l:"<$30K",r:45.2},{l:"$30–50K",r:25.7},{l:"$50–80K",r:17.6},
+      {l:"$80–150K",r:9.7},{l:">$150K",r:7.4}
+    ],
+    tiers: [
+      {l:"High Risk (0–40)",n:1087,r:72.0,c:"#D13438"},
+      {l:"Medium Risk (41–60)",n:952,r:43.7,c:"#C39A00"},
+      {l:"Low Risk (61–80)",n:1948,r:35.6,c:"#0078D4"},
+      {l:"Very Low Risk (81–100)",n:6865,r:7.0,c:"#107C10"}
+    ],
+    cities: [
+      {l:"Dallas",r:23.6},{l:"Los Angeles",r:22.9},{l:"San Francisco",r:21.8},
+      {l:"New York City",r:21.4},{l:"Houston",r:20.9},{l:"Buffalo",r:20.6}
+    ],
+    employment: [
+      {l:"Unemployed",r:23.0},{l:"Self-employed",r:22.8},
+      {l:"Part-time",r:22.4},{l:"Full-time",r:21.3}
+    ],
+    corr: [
+      {l:"Loan-to-income ratio",v:0.386},{l:"Loan % of income",v:0.379},
+      {l:"Interest rate",v:0.335},{l:"Debt-to-income ratio",v:0.322},
+      {l:"Loan amount",v:0.105},{l:"Annual income (neg.)",v:0.144}
+    ]
+  },
+  UK: {
+    kpi: { total:10944, dr:21.7, dc:2378, inc:66, lti:0.17, prior:17.5, label:"UK portfolio" },
+    grades: [
+      {l:"A",r:10.2,c:"#107C10"},{l:"B",r:16.6,c:"#217346"},
+      {l:"C",r:19.7,c:"#C39A00"},{l:"D",r:59.9,c:"#C43E1C"},
+      {l:"E",r:64.1,c:"#D13438"},{l:"F",r:68.5,c:"#A4262C"},{l:"G",r:100.0,c:"#750B1C"}
+    ],
+    intents: [
+      {l:"Venture",r:15.2},{l:"Education",r:16.9},{l:"Personal",r:19.6},
+      {l:"Home Improvement",r:24.4},{l:"Medical",r:27.2},{l:"Debt Consolidation",r:28.5}
+    ],
+    ownership: [
+      {l:"Rent",n:5524,r:31.7},{l:"Mortgage",n:4502,r:12.1},
+      {l:"Own",n:879,r:8.2},{l:"Other",n:39,r:28.2}
+    ],
+    rates: [
+      {l:"<8%",r:9.4},{l:"8–11%",r:15.9},{l:"11–14%",r:18.3},
+      {l:"14–17%",r:50.5},{l:">17%",r:66.2}
+    ],
+    income: [
+      {l:"<$30K",r:45.6},{l:"$30–50K",r:25.3},{l:"$50–80K",r:17.4},
+      {l:"$80–150K",r:9.3},{l:">$150K",r:10.1}
+    ],
+    tiers: [
+      {l:"High Risk (0–40)",n:1032,r:71.0,c:"#D13438"},
+      {l:"Medium Risk (41–60)",n:991,r:42.4,c:"#C39A00"},
+      {l:"Low Risk (61–80)",n:1959,r:35.4,c:"#0078D4"},
+      {l:"Very Low Risk (81–100)",n:6962,r:7.6,c:"#107C10"}
+    ],
+    cities: [
+      {l:"Edinburgh",r:23.5},{l:"Manchester",r:22.5},{l:"Glasgow",r:21.6},
+      {l:"Cardiff",r:21.3},{l:"London",r:21.1},{l:"Swansea",r:20.4}
+    ],
+    employment: [
+      {l:"Self-employed",r:22.2},{l:"Full-time",r:21.9},
+      {l:"Part-time",r:21.1},{l:"Unemployed",r:20.2}
+    ],
+    corr: [
+      {l:"Loan-to-income ratio",v:0.386},{l:"Loan % of income",v:0.379},
+      {l:"Interest rate",v:0.335},{l:"Debt-to-income ratio",v:0.322},
+      {l:"Loan amount",v:0.105},{l:"Annual income (neg.)",v:0.144}
+    ]
+  },
+  Canada: {
+    kpi: { total:10785, dr:21.9, dc:2358, inc:66, lti:0.17, prior:17.8, label:"Canada portfolio" },
+    grades: [
+      {l:"A",r:9.8,c:"#107C10"},{l:"B",r:17.0,c:"#217346"},
+      {l:"C",r:21.5,c:"#C39A00"},{l:"D",r:56.5,c:"#C43E1C"},
+      {l:"E",r:62.9,c:"#D13438"},{l:"F",r:65.4,c:"#A4262C"},{l:"G",r:100.0,c:"#750B1C"}
+    ],
+    intents: [
+      {l:"Venture",r:14.2},{l:"Education",r:17.1},{l:"Personal",r:20.4},
+      {l:"Medical",r:26.2},{l:"Home Improvement",r:27.7},{l:"Debt Consolidation",r:28.9}
+    ],
+    ownership: [
+      {l:"Rent",n:5431,r:31.8},{l:"Mortgage",n:4454,r:12.8},
+      {l:"Own",n:865,r:6.1},{l:"Other",n:35,r:22.9}
+    ],
+    rates: [
+      {l:"<8%",r:9.0},{l:"8–11%",r:16.0},{l:"11–14%",r:20.7},
+      {l:"14–17%",r:47.4},{l:">17%",r:65.3}
+    ],
+    income: [
+      {l:"<$30K",r:45.8},{l:"$30–50K",r:25.7},{l:"$50–80K",r:17.2},
+      {l:"$80–150K",r:9.0},{l:">$150K",r:11.8}
+    ],
+    tiers: [
+      {l:"High Risk (0–40)",n:1031,r:69.3,c:"#D13438"},
+      {l:"Medium Risk (41–60)",n:1013,r:41.3,c:"#C39A00"},
+      {l:"Low Risk (61–80)",n:1930,r:36.4,c:"#0078D4"},
+      {l:"Very Low Risk (81–100)",n:6811,r:7.7,c:"#107C10"}
+    ],
+    cities: [
+      {l:"Vancouver",r:24.2},{l:"Toronto",r:22.0},{l:"Montreal",r:21.9},
+      {l:"Ottawa",r:21.8},{l:"Victoria",r:20.8},{l:"Quebec City",r:20.5}
+    ],
+    employment: [
+      {l:"Unemployed",r:24.7},{l:"Self-employed",r:22.4},
+      {l:"Part-time",r:22.0},{l:"Full-time",r:21.4}
+    ],
+    corr: [
+      {l:"Loan-to-income ratio",v:0.386},{l:"Loan % of income",v:0.379},
+      {l:"Interest rate",v:0.335},{l:"Debt-to-income ratio",v:0.322},
+      {l:"Loan amount",v:0.105},{l:"Annual income (neg.)",v:0.144}
+    ]
+  }
+};
+
+// Grade-level KPI overrides (verified from raw data)
+const GRADE_KPI = {
+  A: { total:10777, dr:10.0, dc:1073,  inc:67, lti:0.15, prior:0.0  },
+  B: { total:10451, dr:16.3, dc:1701,  inc:66, lti:0.18, prior:0.0  },
+  C: { total:6458,  dr:20.7, dc:1339,  inc:65, lti:0.17, prior:50.4 },
+  D: { total:3626,  dr:59.0, dc:2141,  inc:64, lti:0.19, prior:51.7 },
+  E: { total:964,   dr:64.4, dc:621,   inc:71, lti:0.21, prior:48.2 },
+  F: { total:241,   dr:70.5, dc:170,   inc:77, lti:0.22, prior:46.5 },
+  G: { total:64,    dr:98.4, dc:63,    inc:77, lti:0.25, prior:56.2 }
+};
+// Note: Grade E/F/G borrowers earn MORE on average ($71–77K) yet default at 64–98%
+// because their loan amounts are disproportionately large relative to income (LTI 0.21–0.25)
+
+// Intent label map
+const INTENT_LABEL = {
+  VENTURE:"Venture", EDUCATION:"Education", PERSONAL:"Personal",
+  HOMEIMPROVEMENT:"Home Improvement", MEDICAL:"Medical", DEBTCONSOLIDATION:"Debt Consolidation"
+};
+const OWN_LABEL = { OWN:"Own", MORTGAGE:"Mortgage", RENT:"Rent", OTHER:"Other" };
+
+let charts = {};
+
+function barColor(r) {
+  if (r >= 50) return "#D13438";
+  if (r >= 30) return "#C43E1C";
+  if (r >= 20) return "#C39A00";
+  return "#107C10";
+}
+
+function renderHBars(id, data, max, lw) {
+  if (!data || data.length === 0) {
+    document.getElementById(id).innerHTML = '<div style="font-size:10px;color:var(--muted);padding:8px 0;font-style:italic">No data for this segment</div>';
+    return;
+  }
+  document.getElementById(id).innerHTML = data.map(d =>
+    `<div class="hrow">
+      <span class="hlbl" style="min-width:${lw||130}px">${d.l}</span>
+      <div class="htrack"><div class="hfill" style="width:${Math.min(d.r/max*100,100).toFixed(1)}%;background:${barColor(d.r)}"></div></div>
+      <span class="hpct">${d.r.toFixed(1)}%</span>
+    </div>`).join('');
+}
+
+function renderCorrBars(id, data) {
+  const mx = Math.max(...data.map(d=>d.v));
+  document.getElementById(id).innerHTML = data.map(d =>
+    `<div class="hrow">
+      <span class="hlbl" style="min-width:150px;font-size:10px">${d.l}</span>
+      <div class="htrack"><div class="hfill" style="width:${(d.v/mx*100).toFixed(1)}%;background:#0078D4"></div></div>
+      <span class="hpct">${d.v.toFixed(3)}</span>
+    </div>`).join('');
+}
+
+function destroyChart(id) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+  // Replace canvas to fully clear any Chart.js internal cache
+  const canvas = document.getElementById(id);
+  if (canvas && canvas.tagName === 'CANVAS') {
+    const newCanvas = document.createElement('canvas');
+    newCanvas.id = id;
+    canvas.parentNode.replaceChild(newCanvas, canvas);
+  }
+}
+
+function buildOwnership(data) {
+  destroyChart("ownerChart");
+  charts["ownerChart"] = new Chart(document.getElementById("ownerChart"), {
+    type:"doughnut",
+    data:{ labels:data.map(d=>d.l),
+      datasets:[{ data:data.map(d=>d.n),
+        backgroundColor:OWN_COLORS.slice(0,data.length),
+        borderWidth:2, borderColor:"#fff" }] },
+    options:{ responsive:true, maintainAspectRatio:false, cutout:"60%",
+      plugins:{ legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${ctx.parsed.toLocaleString()} (${data[ctx.dataIndex].r}% default)`}} } }
+  });
+  document.getElementById("own-legend").innerHTML = data.map((d,i)=>
+    `<span class="legend-item"><span class="legend-dot" style="background:${OWN_COLORS[i]}"></span>${d.l}: ${d.n.toLocaleString()} (${d.r}%)</span>`
+  ).join('');
+}
+
+function buildBar(id, data, maxY) {
+  destroyChart(id);
+  const max = maxY || Math.max(80, Math.ceil(Math.max(...data.map(d=>d.r))/10)*10);
+  charts[id] = new Chart(document.getElementById(id), {
+    type:"bar",
+    data:{ labels:data.map(d=>d.l), datasets:[{ data:data.map(d=>d.r),
+      backgroundColor:data.map(d=>barColor(d.r)), borderRadius:2 }] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      layout:{ padding:{ top:18 } },
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>` ${ctx.parsed.y.toFixed(1)}% default rate`}},
+      },
+      scales:{ y:{beginAtZero:true,max:max,ticks:{callback:v=>v+"%",font:{size:10}},grid:{color:"#F3F2F1"}},
+               x:{ticks:{font:{size:10}},grid:{display:false}} },
+      animation:{ onComplete: function() {
+        const ctx = this.ctx;
+        this.data.datasets.forEach((dataset, i) => {
+          const meta = this.getDatasetMeta(i);
+          meta.data.forEach((bar, j) => {
+            const val = dataset.data[j];
+            const label = val.toFixed(1) + "%";
+            ctx.save();
+            ctx.font = "bold 9px 'Segoe UI', sans-serif";
+            ctx.fillStyle = "#323130";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "bottom";
+            ctx.fillText(label, bar.x, bar.y - 2);
+            ctx.restore();
+          });
+        });
+      }}
+    }
+  });
+}
+
+function buildLine(id, data) {
+  destroyChart(id);
+  charts[id] = new Chart(document.getElementById(id), {
+    type:"line",
+    data:{ labels:data.map(d=>d.l), datasets:[{ data:data.map(d=>d.r),
+      borderColor:"#0078D4", backgroundColor:"rgba(0,120,212,0.08)",
+      pointBackgroundColor:"#0078D4", pointRadius:4, fill:true, tension:0.3 }] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      layout:{ padding:{ top:18 } },
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>` ${ctx.parsed.y.toFixed(1)}% default rate`}},
+      },
+      scales:{ y:{beginAtZero:true,ticks:{callback:v=>v+"%",font:{size:10}},grid:{color:"#F3F2F1"}},
+               x:{ticks:{font:{size:10}},grid:{display:false}} },
+      animation:{ onComplete: function() {
+        const ctx = this.ctx;
+        this.data.datasets.forEach((dataset, i) => {
+          const meta = this.getDatasetMeta(i);
+          meta.data.forEach((point, j) => {
+            const val = dataset.data[j];
+            const label = val.toFixed(1) + "%";
+            ctx.save();
+            ctx.font = "bold 9px 'Segoe UI', sans-serif";
+            ctx.fillStyle = "#0078D4";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "bottom";
+            ctx.fillText(label, point.x, point.y - 5);
+            ctx.restore();
+          });
+        });
+      }}
+    }
+  });
+}
+
+function buildTier(data) {
+  destroyChart("tierChart");
+  charts["tierChart"] = new Chart(document.getElementById("tierChart"), {
+    type:"bar",
+    data:{ labels:data.map(d=>d.l), datasets:[
+      { label:"Borrowers", data:data.map(d=>d.n),
+        backgroundColor:data.map(d=>d.c+"33"), borderColor:data.map(d=>d.c),
+        borderWidth:1.5, borderRadius:2, yAxisID:"y" },
+      { label:"Default %", data:data.map(d=>d.r), type:"line",
+        borderColor:"#323130", pointBackgroundColor:"#323130",
+        pointRadius:4, fill:false, yAxisID:"y2", tension:0.1 }
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>ctx.datasetIndex===0?` ${ctx.parsed.y.toLocaleString()} borrowers`:` ${ctx.parsed.y}% default`}} },
+      animation:{ onComplete: function() {
+        const ctx = this.ctx;
+        // Label the line dataset (default rate)
+        const meta1 = this.getDatasetMeta(1);
+        meta1.data.forEach((point, j) => {
+          const val = this.data.datasets[1].data[j];
+          const label = val.toFixed(1) + "%";
+          ctx.save();
+          ctx.font = "bold 9px 'Segoe UI', sans-serif";
+          ctx.fillStyle = "#323130";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "bottom";
+          ctx.fillText(label, point.x, point.y - 4);
+          ctx.restore();
+        });
+      }},
+      scales:{
+        y: {beginAtZero:true,ticks:{callback:v=>v.toLocaleString(),font:{size:10}},grid:{color:"#F3F2F1"}},
+        y2:{beginAtZero:true,max:80,position:"right",ticks:{callback:v=>v+"%",font:{size:10}},grid:{display:false}},
+        x: {ticks:{font:{size:9}},grid:{display:false}} } }
+  });
+}
+
+function buildHBar(id, data, maxX) {
+  destroyChart(id);
+  const max = maxX || Math.max(55, Math.ceil(Math.max(...data.map(d=>d.r))/5)*5);
+  charts[id] = new Chart(document.getElementById(id), {
+    type:"bar",
+    data:{ labels:data.map(d=>d.l), datasets:[{ data:data.map(d=>d.r),
+      backgroundColor:"#C39A00", borderRadius:2 }] },
+    options:{ indexAxis:"y", responsive:true, maintainAspectRatio:false,
+      layout:{ padding:{ right:46 } },
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>` ${ctx.parsed.x.toFixed(1)}% default rate`}},
+      },
+      scales:{ x:{beginAtZero:true,max:max,ticks:{callback:v=>v+"%",font:{size:10}},grid:{color:"#F3F2F1"}},
+               y:{ticks:{font:{size:11}},grid:{display:false}} },
+      animation:{ onComplete: function() {
+        const ctx = this.ctx;
+        this.data.datasets.forEach((dataset, i) => {
+          const meta = this.getDatasetMeta(i);
+          meta.data.forEach((bar, j) => {
+            const val = dataset.data[j];
+            const label = val.toFixed(1) + "%";
+            ctx.save();
+            ctx.font = "bold 9px 'Segoe UI', sans-serif";
+            ctx.fillStyle = "#323130";
+            ctx.textAlign = "left";
+            ctx.textBaseline = "middle";
+            ctx.fillText(label, bar.x + 4, bar.y);
+            ctx.restore();
+          });
+        });
+      }}
+    }
+  });
+}
+
+function updateKPIs(k) {
+  document.getElementById("kpi-total").textContent = k.total.toLocaleString();
+  document.getElementById("kpi-total-sub").textContent = k.label;
+  document.getElementById("kpi-dr").textContent = k.dr.toFixed(1)+"%";
+  document.getElementById("kpi-dc").textContent = k.dc.toLocaleString()+" defaults";
+  document.getElementById("kpi-inc").textContent = "$"+k.inc+"K";
+  document.getElementById("kpi-lti").textContent = k.lti.toFixed(2);
+  document.getElementById("kpi-prior").textContent = k.prior.toFixed(1)+"%";
+}
+
+function renderAll(d, k) {
+  updateKPIs(k);
+  renderHBars("grade-bars",  d.grades,  100, 40);
+  renderHBars("intent-bars", d.intents, 35,  155);
+  renderHBars("city-bars",   d.cities,  30,  125);
+  renderCorrBars("corr-bars", d.corr);
+  buildOwnership(d.ownership);
+  buildBar("rateChart", d.rates, Math.max(80, Math.ceil(Math.max(...d.rates.map(r=>r.r))/10)*10));
+  buildLine("incChart", d.income);
+  buildTier(d.tiers);
+  buildHBar("empChart", d.employment, Math.max(55, Math.ceil(Math.max(...d.employment.map(e=>e.r))/5)*5));
+}
+
+
+// ── PRE-COMPUTED FILTER DATA (from raw Excel) ─────────────
+const INTENT_DATA = {"VENTURE":{"kpi":{"total":5719,"dr":14.8,"dc":847,"inc":66,"lti":0.17,"prior":17.3,"label":"Venture"},"grades":[{"l":"A","r":5.7,"c":"107C10"},{"l":"B","r":9.1,"c":"217346"},{"l":"C","r":19.5,"c":"C39A00"},{"l":"D","r":40.1,"c":"C43E1C"},{"l":"E","r":51.7,"c":"D13438"},{"l":"F","r":36.8,"c":"A4262C"},{"l":"G","r":92.9,"c":"750B1C"}],"intents":[{"l":"Venture","r":14.8}],"ownership":[{"l":"Rent","n":2673,"r":26.6},{"l":"Mortgage","n":2234,"r":4.7},{"l":"Own","n":786,"r":3.9},{"l":"Other","n":26,"r":3.8}],"rates":[{"l":"<8%","r":5.7},{"l":"8\u201311%","r":8.4},{"l":"11\u201314%","r":13.7},{"l":"14\u201317%","r":36.8},{"l":">17%","r":49.6}],"income":[{"l":"<$30K","r":37.1},{"l":"$30\u201350K","r":17.6},{"l":"$50\u201380K","r":10.1},{"l":"$80\u2013150K","r":5.3},{"l":">$150K","r":3.7}],"tiers":[{"l":"High Risk (0\u201340)","n":513,"r":55.8,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":506,"r":31.4,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":1015,"r":31.4,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":3685,"r":2.3,"c":"107C10"}],"employment":[{"l":"Unemployed","r":13.2},{"l":"Self-employed","r":16.0},{"l":"Part-time","r":14.4},{"l":"Full-time","r":14.8}],"cities":[{"l":"Edinburgh","r":18.7},{"l":"Dallas","r":18.6},{"l":"Los Angeles","r":17.9},{"l":"Swansea","r":17.7},{"l":"Vancouver","r":17.6},{"l":"San Francisco","r":16.4}],"corr":[{"l":"Loan-to-income ratio","v":0.424},{"l":"Loan % of income","v":0.424},{"l":"Interest rate","v":0.307},{"l":"Debt-to-income ratio","v":0.356},{"l":"Loan amount","v":0.102},{"l":"Annual income (neg.)","v":0.168}]},"EDUCATION":{"kpi":{"total":6453,"dr":17.2,"dc":1111,"inc":64,"lti":0.17,"prior":17.1,"label":"Education"},"grades":[{"l":"A","r":9.3,"c":"107C10"},{"l":"B","r":15.6,"c":"217346"},{"l":"C","r":18.0,"c":"C39A00"},{"l":"D","r":35.3,"c":"C43E1C"},{"l":"E","r":43.2,"c":"D13438"},{"l":"F","r":58.7,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Education","r":17.2}],"ownership":[{"l":"Rent","n":3281,"r":26.2},{"l":"Mortgage","n":2627,"r":8.2},{"l":"Own","n":528,"r":5.5},{"l":"Other","n":17,"r":35.3}],"rates":[{"l":"<8%","r":8.4},{"l":"8\u201311%","r":16.2},{"l":"11\u201314%","r":16.6},{"l":"14\u201317%","r":30.5},{"l":">17%","r":53.1}],"income":[{"l":"<$30K","r":37.9},{"l":"$30\u201350K","r":20.4},{"l":"$50\u201380K","r":13.0},{"l":"$80\u2013150K","r":6.2},{"l":">$150K","r":7.1}],"tiers":[{"l":"High Risk (0\u201340)","n":557,"r":52.1,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":582,"r":28.0,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":1197,"r":30.5,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":4117,"r":7.1,"c":"107C10"}],"employment":[{"l":"Unemployed","r":18.9},{"l":"Self-employed","r":18.6},{"l":"Part-time","r":17.3},{"l":"Full-time","r":16.7}],"cities":[{"l":"Cardiff","r":20.1},{"l":"Los Angeles","r":20.0},{"l":"Vancouver","r":20.0},{"l":"Dallas","r":19.9},{"l":"Quebec City","r":19.6},{"l":"Houston","r":18.5}],"corr":[{"l":"Loan-to-income ratio","v":0.388},{"l":"Loan % of income","v":0.387},{"l":"Interest rate","v":0.222},{"l":"Debt-to-income ratio","v":0.33},{"l":"Loan amount","v":0.107},{"l":"Annual income (neg.)","v":0.171}]},"PERSONAL":{"kpi":{"total":5521,"dr":19.9,"dc":1098,"inc":68,"lti":0.17,"prior":17.4,"label":"Personal"},"grades":[{"l":"A","r":10.6,"c":"107C10"},{"l":"B","r":18.2,"c":"217346"},{"l":"C","r":18.9,"c":"C39A00"},{"l":"D","r":43.5,"c":"C43E1C"},{"l":"E","r":48.3,"c":"D13438"},{"l":"F","r":50.0,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Personal","r":19.9}],"ownership":[{"l":"Rent","n":2717,"r":31.3},{"l":"Mortgage","n":2340,"r":9.1},{"l":"Own","n":446,"r":6.3},{"l":"Other","n":18,"r":44.4}],"rates":[{"l":"<8%","r":9.7},{"l":"8\u201311%","r":16.7},{"l":"11\u201314%","r":19.6},{"l":"14\u201317%","r":38.8},{"l":">17%","r":50.0}],"income":[{"l":"<$30K","r":47.1},{"l":"$30\u201350K","r":24.8},{"l":"$50\u201380K","r":13.5},{"l":"$80\u2013150K","r":7.9},{"l":">$150K","r":6.0}],"tiers":[{"l":"High Risk (0\u201340)","n":530,"r":56.2,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":507,"r":32.5,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":938,"r":37.0,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":3546,"r":8.1,"c":"107C10"}],"employment":[{"l":"Unemployed","r":20.0},{"l":"Self-employed","r":19.8},{"l":"Part-time","r":19.6},{"l":"Full-time","r":20.0}],"cities":[{"l":"Montreal","r":25.6},{"l":"Glasgow","r":23.3},{"l":"Ottawa","r":21.7},{"l":"Dallas","r":21.5},{"l":"Vancouver","r":21.4},{"l":"Manchester","r":20.9}],"corr":[{"l":"Loan-to-income ratio","v":0.393},{"l":"Loan % of income","v":0.393},{"l":"Interest rate","v":0.251},{"l":"Debt-to-income ratio","v":0.313},{"l":"Loan amount","v":0.074},{"l":"Annual income (neg.)","v":0.106}]},"HOMEIMPROVEMENT":{"kpi":{"total":3605,"dr":26.1,"dc":941,"inc":74,"lti":0.17,"prior":19.3,"label":"Home Improvement"},"grades":[{"l":"A","r":12.9,"c":"107C10"},{"l":"B","r":21.5,"c":"217346"},{"l":"C","r":27.3,"c":"C39A00"},{"l":"D","r":54.0,"c":"C43E1C"},{"l":"E","r":51.7,"c":"D13438"},{"l":"F","r":65.6,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Home Improvement","r":26.1}],"ownership":[{"l":"Rent","n":1534,"r":43.4},{"l":"Mortgage","n":1741,"r":13.7},{"l":"Own","n":318,"r":10.7},{"l":"Other","n":12,"r":25.0}],"rates":[{"l":"<8%","r":11.7},{"l":"8\u201311%","r":19.7},{"l":"11\u201314%","r":26.5},{"l":"14\u201317%","r":48.3},{"l":">17%","r":58.5}],"income":[{"l":"<$30K","r":73.6},{"l":"$30\u201350K","r":40.1},{"l":"$50\u201380K","r":18.8},{"l":"$80\u2013150K","r":9.7},{"l":">$150K","r":8.5}],"tiers":[{"l":"High Risk (0\u201340)","n":396,"r":68.7,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":361,"r":42.9,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":567,"r":39.7,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":2281,"r":12.7,"c":"107C10"}],"employment":[{"l":"Unemployed","r":22.8},{"l":"Self-employed","r":27.1},{"l":"Part-time","r":28.8},{"l":"Full-time","r":25.3}],"cities":[{"l":"Victoria","r":32.3},{"l":"San Francisco","r":30.6},{"l":"Ottawa","r":29.2},{"l":"Manchester","r":28.8},{"l":"Montreal","r":28.3},{"l":"Vancouver","r":27.9}],"corr":[{"l":"Loan-to-income ratio","v":0.308},{"l":"Loan % of income","v":0.308},{"l":"Interest rate","v":0.302},{"l":"Debt-to-income ratio","v":0.265},{"l":"Loan amount","v":0.042},{"l":"Annual income (neg.)","v":0.285}]},"MEDICAL":{"kpi":{"total":6071,"dr":26.7,"dc":1621,"inc":61,"lti":0.18,"prior":17.5,"label":"Medical"},"grades":[{"l":"A","r":11.5,"c":"107C10"},{"l":"B","r":17.0,"c":"217346"},{"l":"C","r":21.0,"c":"C39A00"},{"l":"D","r":87.7,"c":"C43E1C"},{"l":"E","r":95.8,"c":"D13438"},{"l":"F","r":96.2,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Medical","r":26.7}],"ownership":[{"l":"Rent","n":3430,"r":32.1},{"l":"Mortgage","n":2190,"r":21.5},{"l":"Own","n":434,"r":9.9},{"l":"Other","n":17,"r":41.2}],"rates":[{"l":"<8%","r":10.8},{"l":"8\u201311%","r":15.7},{"l":"11\u201314%","r":21.3},{"l":"14\u201317%","r":68.7},{"l":">17%","r":93.3}],"income":[{"l":"<$30K","r":42.1},{"l":"$30\u201350K","r":27.2},{"l":"$50\u201380K","r":26.6},{"l":"$80\u2013150K","r":12.1},{"l":">$150K","r":16.8}],"tiers":[{"l":"High Risk (0\u201340)","n":624,"r":91.5,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":536,"r":58.6,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":1134,"r":37.0,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":3777,"r":8.4,"c":"107C10"}],"employment":[{"l":"Unemployed","r":29.7},{"l":"Self-employed","r":26.6},{"l":"Part-time","r":25.7},{"l":"Full-time","r":26.8}],"cities":[{"l":"Manchester","r":30.5},{"l":"Los Angeles","r":29.0},{"l":"Houston","r":28.5},{"l":"Vancouver","r":28.5},{"l":"Dallas","r":28.4},{"l":"Edinburgh","r":28.2}],"corr":[{"l":"Loan-to-income ratio","v":0.414},{"l":"Loan % of income","v":0.385},{"l":"Interest rate","v":0.441},{"l":"Debt-to-income ratio","v":0.347},{"l":"Loan amount","v":0.187},{"l":"Annual income (neg.)","v":0.129}]},"DEBTCONSOLIDATION":{"kpi":{"total":5212,"dr":28.6,"dc":1490,"inc":66,"lti":0.17,"prior":17.9,"label":"Debt Consolidation"},"grades":[{"l":"A","r":11.2,"c":"107C10"},{"l":"B","r":18.7,"c":"217346"},{"l":"C","r":22.7,"c":"C39A00"},{"l":"D","r":92.7,"c":"C43E1C"},{"l":"E","r":100.0,"c":"D13438"},{"l":"F","r":100.0,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Debt Consolidation","r":28.6}],"ownership":[{"l":"Rent","n":2811,"r":35.8},{"l":"Mortgage","n":2312,"r":19.4},{"l":"Own","n":72,"r":38.9},{"l":"Other","n":17,"r":47.1}],"rates":[{"l":"<8%","r":11.2},{"l":"8\u201311%","r":16.9},{"l":"11\u201314%","r":22.7},{"l":"14\u201317%","r":74.0},{"l":">17%","r":97.7}],"income":[{"l":"<$30K","r":51.8},{"l":"$30\u201350K","r":33.0},{"l":"$50\u201380K","r":23.6},{"l":"$80\u2013150K","r":16.1},{"l":">$150K","r":18.8}],"tiers":[{"l":"High Risk (0\u201340)","n":530,"r":96.8,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":464,"r":64.2,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":986,"r":42.0,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":3232,"r":8.2,"c":"107C10"}],"employment":[{"l":"Unemployed","r":32.2},{"l":"Self-employed","r":29.1},{"l":"Part-time","r":29.3},{"l":"Full-time","r":27.9}],"cities":[{"l":"Edinburgh","r":33.9},{"l":"Vancouver","r":32.2},{"l":"Dallas","r":31.2},{"l":"Glasgow","r":31.0},{"l":"Toronto","r":30.9},{"l":"London","r":30.5}],"corr":[{"l":"Loan-to-income ratio","v":0.386},{"l":"Loan % of income","v":0.386},{"l":"Interest rate","v":0.469},{"l":"Debt-to-income ratio","v":0.314},{"l":"Loan amount","v":0.151},{"l":"Annual income (neg.)","v":0.149}]}};
+const OWN_DATA    = {"OWN":{"kpi":{"total":2584,"dr":7.5,"dc":193,"inc":58,"lti":0.19,"prior":17.2,"label":"Own"},"grades":[{"l":"A","r":7.1,"c":"107C10"},{"l":"B","r":4.2,"c":"217346"},{"l":"C","r":6.3,"c":"C39A00"},{"l":"D","r":6.4,"c":"C43E1C"},{"l":"E","r":54.4,"c":"D13438"},{"l":"F","r":53.3,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Venture","r":3.9},{"l":"Education","r":5.5},{"l":"Personal","r":6.3},{"l":"Medical","r":9.9},{"l":"Home Improvement","r":10.7},{"l":"Debt Consolidation","r":38.9}],"ownership":[{"l":"Own","n":2584,"r":7.5}],"rates":[{"l":"<8%","r":7.1},{"l":"8\u201311%","r":4.8},{"l":"11\u201314%","r":4.4},{"l":"14\u201317%","r":9.3},{"l":">17%","r":46.8}],"income":[{"l":"<$30K","r":25.2},{"l":"$30\u201350K","r":1.0},{"l":"$50\u201380K","r":2.6},{"l":"$80\u2013150K","r":1.4},{"l":">$150K","r":1.1}],"tiers":[{"l":"High Risk (0\u201340)","n":158,"r":31.0,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":230,"r":12.6,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":419,"r":10.7,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":1777,"r":3.9,"c":"107C10"}],"employment":[{"l":"Unemployed","r":7.5},{"l":"Self-employed","r":6.7},{"l":"Part-time","r":7.1},{"l":"Full-time","r":7.8}],"cities":[{"l":"Los Angeles","r":10.7},{"l":"Edinburgh","r":10.2},{"l":"Cardiff","r":10.2},{"l":"London","r":9.2},{"l":"Manchester","r":8.7},{"l":"Buffalo","r":8.6}],"corr":[{"l":"Loan-to-income ratio","v":0.267},{"l":"Loan % of income","v":0.265},{"l":"Interest rate","v":0.117},{"l":"Debt-to-income ratio","v":0.23},{"l":"Loan amount","v":0.106},{"l":"Annual income (neg.)","v":0.173}]},"MORTGAGE":{"kpi":{"total":13444,"dr":12.6,"dc":1690,"inc":81,"lti":0.15,"prior":14.8,"label":"Mortgage"},"grades":[{"l":"A","r":4.4,"c":"107C10"},{"l":"B","r":8.0,"c":"217346"},{"l":"C","r":14.2,"c":"C39A00"},{"l":"D","r":45.7,"c":"C43E1C"},{"l":"E","r":47.5,"c":"D13438"},{"l":"F","r":62.9,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Venture","r":4.7},{"l":"Education","r":8.2},{"l":"Personal","r":9.1},{"l":"Home Improvement","r":13.7},{"l":"Debt Consolidation","r":19.4},{"l":"Medical","r":21.5}],"ownership":[{"l":"Mortgage","n":13444,"r":12.6}],"rates":[{"l":"<8%","r":3.9},{"l":"8\u201311%","r":7.6},{"l":"11\u201314%","r":11.7},{"l":"14\u201317%","r":37.7},{"l":">17%","r":58.9}],"income":[{"l":"<$30K","r":28.0},{"l":"$30\u201350K","r":15.3},{"l":"$50\u201380K","r":13.4},{"l":"$80\u2013150K","r":7.9},{"l":">$150K","r":9.5}],"tiers":[{"l":"High Risk (0\u201340)","n":816,"r":55.4,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":860,"r":37.0,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":1741,"r":18.4,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":10027,"r":6.0,"c":"107C10"}],"employment":[{"l":"Unemployed","r":14.6},{"l":"Self-employed","r":13.8},{"l":"Part-time","r":12.3},{"l":"Full-time","r":12.2}],"cities":[{"l":"Vancouver","r":17.0},{"l":"San Francisco","r":14.4},{"l":"Los Angeles","r":13.2},{"l":"New York City","r":13.0},{"l":"Ottawa","r":12.9},{"l":"Montreal","r":12.9}],"corr":[{"l":"Loan-to-income ratio","v":0.146},{"l":"Loan % of income","v":0.131},{"l":"Interest rate","v":0.34},{"l":"Debt-to-income ratio","v":0.114},{"l":"Loan amount","v":0.054},{"l":"Annual income (neg.)","v":0.058}]},"RENT":{"kpi":{"total":16446,"dr":31.6,"dc":5192,"inc":55,"lti":0.18,"prior":19.9,"label":"Rent"},"grades":[{"l":"A","r":17.5,"c":"107C10"},{"l":"B","r":24.1,"c":"217346"},{"l":"C","r":26.6,"c":"C39A00"},{"l":"D","r":73.8,"c":"C43E1C"},{"l":"E","r":75.5,"c":"D13438"},{"l":"F","r":78.0,"c":"A4262C"},{"l":"G","r":96.4,"c":"750B1C"}],"intents":[{"l":"Education","r":26.2},{"l":"Venture","r":26.6},{"l":"Personal","r":31.3},{"l":"Medical","r":32.1},{"l":"Debt Consolidation","r":35.8},{"l":"Home Improvement","r":43.4}],"ownership":[{"l":"Rent","n":16446,"r":31.6}],"rates":[{"l":"<8%","r":17.1},{"l":"8\u201311%","r":22.9},{"l":"11\u201314%","r":26.8},{"l":"14\u201317%","r":61.4},{"l":">17%","r":76.2}],"income":[{"l":"<$30K","r":53.0},{"l":"$30\u201350K","r":34.0},{"l":"$50\u201380K","r":23.3},{"l":"$80\u2013150K","r":13.6},{"l":">$150K","r":13.6}],"tiers":[{"l":"High Risk (0\u201340)","n":2148,"r":79.6,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":1854,"r":48.7,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":3661,"r":46.9,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":8783,"r":9.8,"c":"107C10"}],"employment":[{"l":"Unemployed","r":32.0},{"l":"Self-employed","r":31.5},{"l":"Part-time","r":32.0},{"l":"Full-time","r":31.4}],"cities":[{"l":"Dallas","r":35.2},{"l":"Edinburgh","r":34.4},{"l":"Manchester","r":33.4},{"l":"Vancouver","r":32.8},{"l":"Los Angeles","r":32.5},{"l":"Toronto","r":32.5}],"corr":[{"l":"Loan-to-income ratio","v":0.511},{"l":"Loan % of income","v":0.507},{"l":"Interest rate","v":0.33},{"l":"Debt-to-income ratio","v":0.432},{"l":"Loan amount","v":0.222},{"l":"Annual income (neg.)","v":0.187}]},"OTHER":{"kpi":{"total":107,"dr":30.8,"dc":33,"inc":76,"lti":0.19,"prior":27.1,"label":"Other"},"grades":[{"l":"A","r":11.5,"c":"107C10"},{"l":"B","r":14.7,"c":"217346"},{"l":"C","r":35.3,"c":"C39A00"},{"l":"D","r":55.0,"c":"C43E1C"},{"l":"E","r":75.0,"c":"D13438"},{"l":"F","r":100.0,"c":"A4262C"}],"intents":[{"l":"Venture","r":3.8},{"l":"Home Improvement","r":25.0},{"l":"Education","r":35.3},{"l":"Medical","r":41.2},{"l":"Personal","r":44.4},{"l":"Debt Consolidation","r":47.1}],"ownership":[{"l":"Other","n":107,"r":30.8}],"rates":[{"l":"<8%","r":9.1},{"l":"8\u201311%","r":22.2},{"l":"11\u201314%","r":20.5},{"l":"14\u201317%","r":50.0},{"l":">17%","r":100.0}],"income":[{"l":"<$30K","r":66.7},{"l":"$30\u201350K","r":41.4},{"l":"$50\u201380K","r":26.3},{"l":"$80\u2013150K","r":9.5},{"l":">$150K","r":14.3}],"tiers":[{"l":"High Risk (0\u201340)","n":28,"r":71.4,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":12,"r":33.3,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":16,"r":43.8,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":51,"r":3.9,"c":"107C10"}],"employment":[{"l":"Unemployed","r":25.0},{"l":"Self-employed","r":25.0},{"l":"Part-time","r":41.7},{"l":"Full-time","r":28.6}],"cities":[],"corr":[{"l":"Loan-to-income ratio","v":0.658},{"l":"Loan % of income","v":0.643},{"l":"Interest rate","v":0.372},{"l":"Debt-to-income ratio","v":0.527},{"l":"Loan amount","v":0.259},{"l":"Annual income (neg.)","v":0.223}]}};
+
+
+const CROSS_INTENT = {"USA":{"VENTURE":{"kpi":{"total":1928,"dr":15.0,"dc":289,"inc":66,"lti":0.17,"prior":17.6,"label":"USA \u00b7 Venture"},"grades":[{"l":"A","r":6.2,"c":"107C10"},{"l":"B","r":8.2,"c":"217346"},{"l":"C","r":19.8,"c":"C39A00"},{"l":"D","r":40.8,"c":"C43E1C"},{"l":"E","r":48.5,"c":"D13438"},{"l":"F","r":60.0,"c":"A4262C"},{"l":"G","r":83.3,"c":"750B1C"}],"intents":[{"l":"Venture","r":15.0}],"ownership":[{"l":"Rent","n":909,"r":25.7},{"l":"Mortgage","n":746,"r":5.6},{"l":"Own","n":265,"r":4.9},{"l":"Other","n":8,"r":0.0}],"rates":[{"l":"<8%","r":6.6},{"l":"8\u201311%","r":6.7},{"l":"11\u201314%","r":13.1},{"l":"14\u201317%","r":39.0},{"l":">17%","r":60.0}],"income":[{"l":"<$30K","r":34.8},{"l":"$30\u201350K","r":18.8},{"l":"$50\u201380K","r":10.7},{"l":"$80\u2013150K","r":4.4},{"l":">$150K","r":4.3}],"tiers":[{"l":"High Risk (0\u201340)","n":170,"r":58.2,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":169,"r":33.1,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":352,"r":29.0,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":1237,"r":2.6,"c":"107C10"}],"employment":[{"l":"Unemployed","r":12.8},{"l":"Self-employed","r":15.5},{"l":"Part-time","r":15.8},{"l":"Full-time","r":14.8}],"cities":[{"l":"Dallas","r":18.6},{"l":"Los Angeles","r":17.9},{"l":"San Francisco","r":16.4},{"l":"Buffalo","r":13.8},{"l":"New York City","r":12.7},{"l":"Houston","r":9.5}],"corr":[{"l":"Loan-to-income ratio","v":0.426},{"l":"Loan % of income","v":0.426},{"l":"Interest rate","v":0.319},{"l":"Debt-to-income ratio","v":0.352},{"l":"Loan amount","v":0.107},{"l":"Annual income (neg.)","v":0.184}]},"EDUCATION":{"kpi":{"total":2112,"dr":17.7,"dc":373,"inc":64,"lti":0.17,"prior":16.8,"label":"USA \u00b7 Education"},"grades":[{"l":"A","r":10.0,"c":"107C10"},{"l":"B","r":14.5,"c":"217346"},{"l":"C","r":17.9,"c":"C39A00"},{"l":"D","r":37.4,"c":"C43E1C"},{"l":"E","r":51.5,"c":"D13438"},{"l":"F","r":64.7,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Education","r":17.7}],"ownership":[{"l":"Rent","n":1064,"r":26.0},{"l":"Mortgage","n":875,"r":9.9},{"l":"Own","n":169,"r":4.1},{"l":"Other","n":4,"r":50.0}],"rates":[{"l":"<8%","r":9.3},{"l":"8\u201311%","r":16.0},{"l":"11\u201314%","r":16.7},{"l":"14\u201317%","r":30.8},{"l":">17%","r":66.7}],"income":[{"l":"<$30K","r":37.7},{"l":"$30\u201350K","r":20.1},{"l":"$50\u201380K","r":13.8},{"l":"$80\u2013150K","r":7.5},{"l":">$150K","r":3.5}],"tiers":[{"l":"High Risk (0\u201340)","n":186,"r":54.3,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":175,"r":30.9,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":417,"r":29.3,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":1334,"r":7.2,"c":"107C10"}],"employment":[{"l":"Unemployed","r":15.3},{"l":"Self-employed","r":19.7},{"l":"Part-time","r":19.3},{"l":"Full-time","r":16.8}],"cities":[{"l":"Los Angeles","r":20.0},{"l":"Dallas","r":19.9},{"l":"Houston","r":18.5},{"l":"New York City","r":17.1},{"l":"San Francisco","r":15.5},{"l":"Buffalo","r":14.7}],"corr":[{"l":"Loan-to-income ratio","v":0.377},{"l":"Loan % of income","v":0.376},{"l":"Interest rate","v":0.246},{"l":"Debt-to-income ratio","v":0.32},{"l":"Loan amount","v":0.114},{"l":"Annual income (neg.)","v":0.143}]},"PERSONAL":{"kpi":{"total":1888,"dr":19.7,"dc":372,"inc":69,"lti":0.17,"prior":17.6,"label":"USA \u00b7 Personal"},"grades":[{"l":"A","r":9.8,"c":"107C10"},{"l":"B","r":17.2,"c":"217346"},{"l":"C","r":19.9,"c":"C39A00"},{"l":"D","r":44.0,"c":"C43E1C"},{"l":"E","r":54.3,"c":"D13438"},{"l":"F","r":42.9,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Personal","r":19.7}],"ownership":[{"l":"Rent","n":924,"r":31.2},{"l":"Mortgage","n":803,"r":8.6},{"l":"Own","n":153,"r":7.2},{"l":"Other","n":8,"r":50.0}],"rates":[{"l":"<8%","r":9.0},{"l":"8\u201311%","r":15.6},{"l":"11\u201314%","r":19.3},{"l":"14\u201317%","r":39.0},{"l":">17%","r":59.5}],"income":[{"l":"<$30K","r":45.5},{"l":"$30\u201350K","r":24.4},{"l":"$50\u201380K","r":12.7},{"l":"$80\u2013150K","r":9.8},{"l":">$150K","r":3.2}],"tiers":[{"l":"High Risk (0\u201340)","n":192,"r":56.2,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":173,"r":34.1,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":310,"r":39.4,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":1213,"r":6.8,"c":"107C10"}],"employment":[{"l":"Unemployed","r":20.6},{"l":"Self-employed","r":19.4},{"l":"Part-time","r":19.7},{"l":"Full-time","r":19.7}],"cities":[{"l":"Dallas","r":21.5},{"l":"Buffalo","r":20.6},{"l":"New York City","r":20.1},{"l":"San Francisco","r":19.9},{"l":"Los Angeles","r":18.3},{"l":"Houston","r":17.8}],"corr":[{"l":"Loan-to-income ratio","v":0.425},{"l":"Loan % of income","v":0.424},{"l":"Interest rate","v":0.282},{"l":"Debt-to-income ratio","v":0.355},{"l":"Loan amount","v":0.124},{"l":"Annual income (neg.)","v":0.078}]},"HOMEIMPROVEMENT":{"kpi":{"total":1194,"dr":26.3,"dc":314,"inc":72,"lti":0.17,"prior":17.8,"label":"USA \u00b7 Home Improvement"},"grades":[{"l":"A","r":12.8,"c":"107C10"},{"l":"B","r":20.3,"c":"217346"},{"l":"C","r":31.3,"c":"C39A00"},{"l":"D","r":56.4,"c":"C43E1C"},{"l":"E","r":50.0,"c":"D13438"},{"l":"F","r":83.3,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Home Improvement","r":26.3}],"ownership":[{"l":"Rent","n":537,"r":43.0},{"l":"Mortgage","n":560,"r":12.9},{"l":"Own","n":95,"r":10.5},{"l":"Other","n":2,"r":50.0}],"rates":[{"l":"<8%","r":11.9},{"l":"8\u201311%","r":19.4},{"l":"11\u201314%","r":28.6},{"l":"14\u201317%","r":50.3},{"l":">17%","r":55.8}],"income":[{"l":"<$30K","r":77.4},{"l":"$30\u201350K","r":39.2},{"l":"$50\u201380K","r":18.5},{"l":"$80\u2013150K","r":8.5},{"l":">$150K","r":10.4}],"tiers":[{"l":"High Risk (0\u201340)","n":129,"r":65.9,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":114,"r":49.1,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":179,"r":49.7,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":772,"r":10.9,"c":"107C10"}],"employment":[{"l":"Unemployed","r":23.0},{"l":"Self-employed","r":28.2},{"l":"Part-time","r":28.0},{"l":"Full-time","r":25.7}],"cities":[{"l":"San Francisco","r":30.6},{"l":"Buffalo","r":27.9},{"l":"New York City","r":27.2},{"l":"Los Angeles","r":24.5},{"l":"Dallas","r":24.2},{"l":"Houston","r":22.9}],"corr":[{"l":"Loan-to-income ratio","v":0.324},{"l":"Loan % of income","v":0.323},{"l":"Interest rate","v":0.309},{"l":"Debt-to-income ratio","v":0.275},{"l":"Loan amount","v":0.039},{"l":"Annual income (neg.)","v":0.305}]},"MEDICAL":{"kpi":{"total":1987,"dr":26.7,"dc":530,"inc":62,"lti":0.18,"prior":18.4,"label":"USA \u00b7 Medical"},"grades":[{"l":"A","r":11.6,"c":"107C10"},{"l":"B","r":17.4,"c":"217346"},{"l":"C","r":20.5,"c":"C39A00"},{"l":"D","r":88.8,"c":"C43E1C"},{"l":"E","r":93.5,"c":"D13438"},{"l":"F","r":100.0,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Medical","r":26.7}],"ownership":[{"l":"Rent","n":1116,"r":31.2},{"l":"Mortgage","n":729,"r":22.1},{"l":"Own","n":136,"r":13.2},{"l":"Other","n":6,"r":50.0}],"rates":[{"l":"<8%","r":12.0},{"l":"8\u201311%","r":14.5},{"l":"11\u201314%","r":20.8},{"l":"14\u201317%","r":68.0},{"l":">17%","r":93.8}],"income":[{"l":"<$30K","r":41.2},{"l":"$30\u201350K","r":27.1},{"l":"$50\u201380K","r":27.9},{"l":"$80\u2013150K","r":12.3},{"l":">$150K","r":10.2}],"tiers":[{"l":"High Risk (0\u201340)","n":204,"r":92.2,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":170,"r":58.2,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":396,"r":34.8,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":1217,"r":8.6,"c":"107C10"}],"employment":[{"l":"Unemployed","r":31.9},{"l":"Self-employed","r":24.3},{"l":"Part-time","r":26.4},{"l":"Full-time","r":27.0}],"cities":[{"l":"Los Angeles","r":29.0},{"l":"Houston","r":28.5},{"l":"Dallas","r":28.4},{"l":"San Francisco","r":27.2},{"l":"New York City","r":24.3},{"l":"Buffalo","r":22.6}],"corr":[{"l":"Loan-to-income ratio","v":0.404},{"l":"Loan % of income","v":0.375},{"l":"Interest rate","v":0.421},{"l":"Debt-to-income ratio","v":0.329},{"l":"Loan amount","v":0.179},{"l":"Annual income (neg.)","v":0.138}]},"DEBTCONSOLIDATION":{"kpi":{"total":1743,"dr":28.3,"dc":494,"inc":68,"lti":0.17,"prior":17.7,"label":"USA \u00b7 Debt Consolidation"},"grades":[{"l":"A","r":9.8,"c":"107C10"},{"l":"B","r":16.0,"c":"217346"},{"l":"C","r":22.4,"c":"C39A00"},{"l":"D","r":94.1,"c":"C43E1C"},{"l":"E","r":100.0,"c":"D13438"},{"l":"F","r":100.0,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Debt Consolidation","r":28.3}],"ownership":[{"l":"Rent","n":941,"r":35.9},{"l":"Mortgage","n":775,"r":18.5},{"l":"Own","n":22,"r":40.9},{"l":"Other","n":5,"r":80.0}],"rates":[{"l":"<8%","r":10.3},{"l":"8\u201311%","r":13.5},{"l":"11\u201314%","r":24.0},{"l":"14\u201317%","r":74.5},{"l":">17%","r":93.3}],"income":[{"l":"<$30K","r":53.3},{"l":"$30\u201350K","r":34.4},{"l":"$50\u201380K","r":22.4},{"l":"$80\u2013150K","r":16.2},{"l":">$150K","r":14.1}],"tiers":[{"l":"High Risk (0\u201340)","n":206,"r":98.1,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":151,"r":60.9,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":294,"r":41.2,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":1092,"r":7.2,"c":"107C10"}],"employment":[{"l":"Unemployed","r":37.8},{"l":"Self-employed","r":33.0},{"l":"Part-time","r":27.3},{"l":"Full-time","r":26.7}],"cities":[{"l":"Dallas","r":31.2},{"l":"Los Angeles","r":29.6},{"l":"Houston","r":29.1},{"l":"New York City","r":28.9},{"l":"Buffalo","r":26.4},{"l":"San Francisco","r":25.1}],"corr":[{"l":"Loan-to-income ratio","v":0.41},{"l":"Loan % of income","v":0.409},{"l":"Interest rate","v":0.497},{"l":"Debt-to-income ratio","v":0.335},{"l":"Loan amount","v":0.169},{"l":"Annual income (neg.)","v":0.157}]}},"UK":{"VENTURE":{"kpi":{"total":1926,"dr":15.2,"dc":293,"inc":68,"lti":0.17,"prior":16.9,"label":"UK \u00b7 Venture"},"grades":[{"l":"A","r":5.3,"c":"107C10"},{"l":"B","r":10.3,"c":"217346"},{"l":"C","r":18.4,"c":"C39A00"},{"l":"D","r":44.9,"c":"C43E1C"},{"l":"E","r":56.6,"c":"D13438"},{"l":"F","r":38.5,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Venture","r":15.2}],"ownership":[{"l":"Rent","n":885,"r":28.7},{"l":"Mortgage","n":754,"r":3.8},{"l":"Own","n":278,"r":3.2},{"l":"Other","n":9,"r":11.1}],"rates":[{"l":"<8%","r":4.7},{"l":"8\u201311%","r":10.0},{"l":"11\u201314%","r":13.2},{"l":"14\u201317%","r":40.6},{"l":">17%","r":45.2}],"income":[{"l":"<$30K","r":41.0},{"l":"$30\u201350K","r":17.4},{"l":"$50\u201380K","r":10.3},{"l":"$80\u2013150K","r":4.8},{"l":">$150K","r":1.2}],"tiers":[{"l":"High Risk (0\u201340)","n":167,"r":61.1,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":168,"r":32.1,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":335,"r":32.8,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":1256,"r":2.1,"c":"107C10"}],"employment":[{"l":"Unemployed","r":10.2},{"l":"Self-employed","r":17.1},{"l":"Part-time","r":14.9},{"l":"Full-time","r":15.2}],"cities":[{"l":"Edinburgh","r":18.7},{"l":"Swansea","r":17.7},{"l":"Manchester","r":15.3},{"l":"Glasgow","r":15.0},{"l":"London","r":12.8},{"l":"Cardiff","r":12.4}],"corr":[{"l":"Loan-to-income ratio","v":0.442},{"l":"Loan % of income","v":0.442},{"l":"Interest rate","v":0.315},{"l":"Debt-to-income ratio","v":0.362},{"l":"Loan amount","v":0.097},{"l":"Annual income (neg.)","v":0.157}]},"EDUCATION":{"kpi":{"total":2132,"dr":16.9,"dc":360,"inc":65,"lti":0.17,"prior":16.7,"label":"UK \u00b7 Education"},"grades":[{"l":"A","r":9.6,"c":"107C10"},{"l":"B","r":16.0,"c":"217346"},{"l":"C","r":17.3,"c":"C39A00"},{"l":"D","r":35.3,"c":"C43E1C"},{"l":"E","r":37.0,"c":"D13438"},{"l":"F","r":55.6,"c":"A4262C"}],"intents":[{"l":"Education","r":16.9}],"ownership":[{"l":"Rent","n":1119,"r":25.5},{"l":"Mortgage","n":855,"r":7.0},{"l":"Own","n":151,"r":7.9},{"l":"Other","n":7,"r":42.9}],"rates":[{"l":"<8%","r":8.4},{"l":"8\u201311%","r":16.1},{"l":"11\u201314%","r":15.9},{"l":"14\u201317%","r":30.7},{"l":">17%","r":41.7}],"income":[{"l":"<$30K","r":36.6},{"l":"$30\u201350K","r":21.5},{"l":"$50\u201380K","r":13.2},{"l":"$80\u2013150K","r":4.7},{"l":">$150K","r":7.5}],"tiers":[{"l":"High Risk (0\u201340)","n":177,"r":49.7,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":190,"r":27.4,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":388,"r":29.9,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":1377,"r":7.6,"c":"107C10"}],"employment":[{"l":"Unemployed","r":14.8},{"l":"Self-employed","r":17.8},{"l":"Part-time","r":17.4},{"l":"Full-time","r":16.7}],"cities":[{"l":"Cardiff","r":20.1},{"l":"Edinburgh","r":18.2},{"l":"Swansea","r":17.2},{"l":"Manchester","r":16.3},{"l":"London","r":15.4},{"l":"Glasgow","r":14.0}],"corr":[{"l":"Loan-to-income ratio","v":0.401},{"l":"Loan % of income","v":0.4},{"l":"Interest rate","v":0.191},{"l":"Debt-to-income ratio","v":0.33},{"l":"Loan amount","v":0.106},{"l":"Annual income (neg.)","v":0.192}]},"PERSONAL":{"kpi":{"total":1784,"dr":19.6,"dc":349,"inc":66,"lti":0.17,"prior":16.8,"label":"UK \u00b7 Personal"},"grades":[{"l":"A","r":11.9,"c":"107C10"},{"l":"B","r":17.4,"c":"217346"},{"l":"C","r":15.8,"c":"C39A00"},{"l":"D","r":44.8,"c":"C43E1C"},{"l":"E","r":48.2,"c":"D13438"},{"l":"F","r":53.8,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Personal","r":19.6}],"ownership":[{"l":"Rent","n":890,"r":30.3},{"l":"Mortgage","n":758,"r":9.1},{"l":"Own","n":132,"r":6.8},{"l":"Other","n":4,"r":25.0}],"rates":[{"l":"<8%","r":10.5},{"l":"8\u201311%","r":16.4},{"l":"11\u201314%","r":17.2},{"l":"14\u201317%","r":40.2},{"l":">17%","r":46.8}],"income":[{"l":"<$30K","r":48.7},{"l":"$30\u201350K","r":23.0},{"l":"$50\u201380K","r":13.0},{"l":"$80\u2013150K","r":8.5},{"l":">$150K","r":8.1}],"tiers":[{"l":"High Risk (0\u201340)","n":174,"r":56.9,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":150,"r":28.0,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":315,"r":36.2,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":1145,"r":8.2,"c":"107C10"}],"employment":[{"l":"Unemployed","r":19.8},{"l":"Self-employed","r":20.0},{"l":"Part-time","r":19.7},{"l":"Full-time","r":19.4}],"cities":[{"l":"Glasgow","r":23.3},{"l":"Manchester","r":20.9},{"l":"London","r":19.7},{"l":"Swansea","r":19.1},{"l":"Cardiff","r":17.5},{"l":"Edinburgh","r":16.9}],"corr":[{"l":"Loan-to-income ratio","v":0.386},{"l":"Loan % of income","v":0.386},{"l":"Interest rate","v":0.235},{"l":"Debt-to-income ratio","v":0.293},{"l":"Loan amount","v":0.067},{"l":"Annual income (neg.)","v":0.194}]},"HOMEIMPROVEMENT":{"kpi":{"total":1241,"dr":24.4,"dc":303,"inc":75,"lti":0.17,"prior":20.5,"label":"UK \u00b7 Home Improvement"},"grades":[{"l":"A","r":13.4,"c":"107C10"},{"l":"B","r":20.1,"c":"217346"},{"l":"C","r":22.5,"c":"C39A00"},{"l":"D","r":51.2,"c":"C43E1C"},{"l":"E","r":50.0,"c":"D13438"},{"l":"F","r":50.0,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Home Improvement","r":24.4}],"ownership":[{"l":"Rent","n":505,"r":41.4},{"l":"Mortgage","n":614,"r":12.7},{"l":"Own","n":116,"r":12.9},{"l":"Other","n":6,"r":16.7}],"rates":[{"l":"<8%","r":12.5},{"l":"8\u201311%","r":18.8},{"l":"11\u201314%","r":22.0},{"l":"14\u201317%","r":44.1},{"l":">17%","r":63.4}],"income":[{"l":"<$30K","r":70.7},{"l":"$30\u201350K","r":39.7},{"l":"$50\u201380K","r":16.7},{"l":"$80\u2013150K","r":9.4},{"l":">$150K","r":8.3}],"tiers":[{"l":"High Risk (0\u201340)","n":129,"r":68.2,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":134,"r":38.8,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":190,"r":33.2,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":788,"r":12.7,"c":"107C10"}],"employment":[{"l":"Unemployed","r":18.5},{"l":"Self-employed","r":21.4},{"l":"Part-time","r":25.8},{"l":"Full-time","r":25.3}],"cities":[{"l":"Manchester","r":28.8},{"l":"Edinburgh","r":27.5},{"l":"London","r":25.4},{"l":"Cardiff","r":23.1},{"l":"Swansea","r":22.5},{"l":"Glasgow","r":19.9}],"corr":[{"l":"Loan-to-income ratio","v":0.313},{"l":"Loan % of income","v":0.314},{"l":"Interest rate","v":0.283},{"l":"Debt-to-income ratio","v":0.267},{"l":"Loan amount","v":0.045},{"l":"Annual income (neg.)","v":0.273}]},"MEDICAL":{"kpi":{"total":2122,"dr":27.2,"dc":577,"inc":60,"lti":0.18,"prior":17.2,"label":"UK \u00b7 Medical"},"grades":[{"l":"A","r":10.6,"c":"107C10"},{"l":"B","r":18.6,"c":"217346"},{"l":"C","r":21.9,"c":"C39A00"},{"l":"D","r":86.7,"c":"C43E1C"},{"l":"E","r":98.1,"c":"D13438"},{"l":"F","r":95.0,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Medical","r":27.2}],"ownership":[{"l":"Rent","n":1190,"r":33.6},{"l":"Mortgage","n":750,"r":20.9},{"l":"Own","n":174,"r":9.2},{"l":"Other","n":8,"r":50.0}],"rates":[{"l":"<8%","r":9.7},{"l":"8\u201311%","r":17.2},{"l":"11\u201314%","r":21.9},{"l":"14\u201317%","r":70.6},{"l":">17%","r":91.1}],"income":[{"l":"<$30K","r":41.0},{"l":"$30\u201350K","r":28.1},{"l":"$50\u201380K","r":26.5},{"l":"$80\u2013150K","r":12.4},{"l":">$150K","r":20.3}],"tiers":[{"l":"High Risk (0\u201340)","n":225,"r":90.7,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":186,"r":61.3,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":388,"r":37.4,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":1323,"r":8.6,"c":"107C10"}],"employment":[{"l":"Unemployed","r":27.4},{"l":"Self-employed","r":29.5},{"l":"Part-time","r":23.7},{"l":"Full-time","r":27.7}],"cities":[{"l":"Manchester","r":30.5},{"l":"Edinburgh","r":28.2},{"l":"Cardiff","r":28.0},{"l":"Glasgow","r":26.9},{"l":"London","r":26.2},{"l":"Swansea","r":23.2}],"corr":[{"l":"Loan-to-income ratio","v":0.397},{"l":"Loan % of income","v":0.369},{"l":"Interest rate","v":0.456},{"l":"Debt-to-income ratio","v":0.324},{"l":"Loan amount","v":0.187},{"l":"Annual income (neg.)","v":0.131}]},"DEBTCONSOLIDATION":{"kpi":{"total":1739,"dr":28.5,"dc":496,"inc":68,"lti":0.17,"prior":17.9,"label":"UK \u00b7 Debt Consolidation"},"grades":[{"l":"A","r":12.5,"c":"107C10"},{"l":"B","r":18.6,"c":"217346"},{"l":"C","r":22.8,"c":"C39A00"},{"l":"D","r":91.1,"c":"C43E1C"},{"l":"E","r":100.0,"c":"D13438"},{"l":"F","r":100.0,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Debt Consolidation","r":28.5}],"ownership":[{"l":"Rent","n":935,"r":35.4},{"l":"Mortgage","n":771,"r":19.8},{"l":"Own","n":28,"r":39.3},{"l":"Other","n":5,"r":20.0}],"rates":[{"l":"<8%","r":12.3},{"l":"8\u201311%","r":18.7},{"l":"11\u201314%","r":21.3},{"l":"14\u201317%","r":73.3},{"l":">17%","r":100.0}],"income":[{"l":"<$30K","r":51.0},{"l":"$30\u201350K","r":30.5},{"l":"$50\u201380K","r":25.3},{"l":"$80\u2013150K","r":17.5},{"l":">$150K","r":16.7}],"tiers":[{"l":"High Risk (0\u201340)","n":160,"r":95.0,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":163,"r":65.0,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":343,"r":42.6,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":1073,"r":8.6,"c":"107C10"}],"employment":[{"l":"Unemployed","r":29.4},{"l":"Self-employed","r":27.1},{"l":"Part-time","r":28.6},{"l":"Full-time","r":28.8}],"cities":[{"l":"Edinburgh","r":33.9},{"l":"Glasgow","r":31.0},{"l":"London","r":30.5},{"l":"Cardiff","r":28.0},{"l":"Manchester","r":24.1},{"l":"Swansea","r":23.7}],"corr":[{"l":"Loan-to-income ratio","v":0.357},{"l":"Loan % of income","v":0.357},{"l":"Interest rate","v":0.46},{"l":"Debt-to-income ratio","v":0.287},{"l":"Loan amount","v":0.127},{"l":"Annual income (neg.)","v":0.137}]}},"Canada":{"VENTURE":{"kpi":{"total":1865,"dr":14.2,"dc":265,"inc":65,"lti":0.17,"prior":17.6,"label":"Canada \u00b7 Venture"},"grades":[{"l":"A","r":5.5,"c":"107C10"},{"l":"B","r":8.6,"c":"217346"},{"l":"C","r":20.1,"c":"C39A00"},{"l":"D","r":34.8,"c":"C43E1C"},{"l":"E","r":50.9,"c":"D13438"},{"l":"F","r":20.0,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Venture","r":14.2}],"ownership":[{"l":"Rent","n":879,"r":25.4},{"l":"Mortgage","n":734,"r":4.5},{"l":"Own","n":243,"r":3.7},{"l":"Other","n":9,"r":0.0}],"rates":[{"l":"<8%","r":5.7},{"l":"8\u201311%","r":8.4},{"l":"11\u201314%","r":14.9},{"l":"14\u201317%","r":31.6},{"l":">17%","r":44.2}],"income":[{"l":"<$30K","r":35.1},{"l":"$30\u201350K","r":16.5},{"l":"$50\u201380K","r":9.3},{"l":"$80\u2013150K","r":6.7},{"l":">$150K","r":6.2}],"tiers":[{"l":"High Risk (0\u201340)","n":176,"r":48.3,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":169,"r":29.0,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":328,"r":32.6,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":1192,"r":2.0,"c":"107C10"}],"employment":[{"l":"Unemployed","r":16.0},{"l":"Self-employed","r":15.3},{"l":"Part-time","r":12.5},{"l":"Full-time","r":14.4}],"cities":[{"l":"Vancouver","r":17.6},{"l":"Victoria","r":15.2},{"l":"Toronto","r":15.2},{"l":"Ottawa","r":12.6},{"l":"Montreal","r":12.6},{"l":"Quebec City","r":12.1}],"corr":[{"l":"Loan-to-income ratio","v":0.403},{"l":"Loan % of income","v":0.403},{"l":"Interest rate","v":0.286},{"l":"Debt-to-income ratio","v":0.355},{"l":"Loan amount","v":0.105},{"l":"Annual income (neg.)","v":0.188}]},"EDUCATION":{"kpi":{"total":2209,"dr":17.1,"dc":378,"inc":64,"lti":0.17,"prior":17.7,"label":"Canada \u00b7 Education"},"grades":[{"l":"A","r":8.2,"c":"107C10"},{"l":"B","r":16.3,"c":"217346"},{"l":"C","r":18.8,"c":"C39A00"},{"l":"D","r":33.6,"c":"C43E1C"},{"l":"E","r":40.0,"c":"D13438"},{"l":"F","r":54.5,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Education","r":17.1}],"ownership":[{"l":"Rent","n":1098,"r":27.1},{"l":"Mortgage","n":897,"r":7.7},{"l":"Own","n":208,"r":4.8},{"l":"Other","n":6,"r":16.7}],"rates":[{"l":"<8%","r":7.3},{"l":"8\u201311%","r":16.4},{"l":"11\u201314%","r":17.2},{"l":"14\u201317%","r":30.2},{"l":">17%","r":50.0}],"income":[{"l":"<$30K","r":39.4},{"l":"$30\u201350K","r":19.8},{"l":"$50\u201380K","r":12.1},{"l":"$80\u2013150K","r":6.3},{"l":">$150K","r":9.6}],"tiers":[{"l":"High Risk (0\u201340)","n":194,"r":52.1,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":217,"r":26.3,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":392,"r":32.4,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":1406,"r":6.6,"c":"107C10"}],"employment":[{"l":"Unemployed","r":27.1},{"l":"Self-employed","r":18.2},{"l":"Part-time","r":15.1},{"l":"Full-time","r":16.7}],"cities":[{"l":"Vancouver","r":20.0},{"l":"Quebec City","r":19.6},{"l":"Ottawa","r":18.2},{"l":"Toronto","r":16.9},{"l":"Montreal","r":15.3},{"l":"Victoria","r":12.7}],"corr":[{"l":"Loan-to-income ratio","v":0.386},{"l":"Loan % of income","v":0.385},{"l":"Interest rate","v":0.229},{"l":"Debt-to-income ratio","v":0.338},{"l":"Loan amount","v":0.1},{"l":"Annual income (neg.)","v":0.191}]},"PERSONAL":{"kpi":{"total":1849,"dr":20.4,"dc":377,"inc":69,"lti":0.17,"prior":17.6,"label":"Canada \u00b7 Personal"},"grades":[{"l":"A","r":10.1,"c":"107C10"},{"l":"B","r":20.0,"c":"217346"},{"l":"C","r":21.0,"c":"C39A00"},{"l":"D","r":42.0,"c":"C43E1C"},{"l":"E","r":42.2,"c":"D13438"},{"l":"F","r":50.0,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Personal","r":20.4}],"ownership":[{"l":"Rent","n":903,"r":32.3},{"l":"Mortgage","n":779,"r":9.5},{"l":"Own","n":161,"r":5.0},{"l":"Other","n":6,"r":50.0}],"rates":[{"l":"<8%","r":9.6},{"l":"8\u201311%","r":18.1},{"l":"11\u201314%","r":22.3},{"l":"14\u201317%","r":37.5},{"l":">17%","r":43.9}],"income":[{"l":"<$30K","r":47.3},{"l":"$30\u201350K","r":26.9},{"l":"$50\u201380K","r":14.8},{"l":"$80\u2013150K","r":5.2},{"l":">$150K","r":6.6}],"tiers":[{"l":"High Risk (0\u201340)","n":164,"r":55.5,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":184,"r":34.8,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":313,"r":35.5,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":1188,"r":9.3,"c":"107C10"}],"employment":[{"l":"Unemployed","r":19.6},{"l":"Self-employed","r":19.9},{"l":"Part-time","r":19.4},{"l":"Full-time","r":20.9}],"cities":[{"l":"Montreal","r":25.6},{"l":"Ottawa","r":21.7},{"l":"Vancouver","r":21.4},{"l":"Toronto","r":19.9},{"l":"Victoria","r":18.6},{"l":"Quebec City","r":15.8}],"corr":[{"l":"Loan-to-income ratio","v":0.37},{"l":"Loan % of income","v":0.371},{"l":"Interest rate","v":0.235},{"l":"Debt-to-income ratio","v":0.292},{"l":"Loan amount","v":0.031},{"l":"Annual income (neg.)","v":0.153}]},"HOMEIMPROVEMENT":{"kpi":{"total":1170,"dr":27.7,"dc":324,"inc":73,"lti":0.16,"prior":19.7,"label":"Canada \u00b7 Home Improvement"},"grades":[{"l":"A","r":12.4,"c":"107C10"},{"l":"B","r":24.6,"c":"217346"},{"l":"C","r":28.5,"c":"C39A00"},{"l":"D","r":54.5,"c":"C43E1C"},{"l":"E","r":55.3,"c":"D13438"},{"l":"F","r":71.4,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Home Improvement","r":27.7}],"ownership":[{"l":"Rent","n":492,"r":45.7},{"l":"Mortgage","n":567,"r":15.7},{"l":"Own","n":107,"r":8.4},{"l":"Other","n":4,"r":25.0}],"rates":[{"l":"<8%","r":10.6},{"l":"8\u201311%","r":20.9},{"l":"11\u201314%","r":29.0},{"l":"14\u201317%","r":51.1},{"l":">17%","r":56.5}],"income":[{"l":"<$30K","r":72.7},{"l":"$30\u201350K","r":41.3},{"l":"$50\u201380K","r":21.3},{"l":"$80\u2013150K","r":11.4},{"l":">$150K","r":7.0}],"tiers":[{"l":"High Risk (0\u201340)","n":138,"r":71.7,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":113,"r":41.6,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":198,"r":36.9,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":721,"r":14.6,"c":"107C10"}],"employment":[{"l":"Unemployed","r":26.9},{"l":"Self-employed","r":32.2},{"l":"Part-time","r":32.2},{"l":"Full-time","r":25.0}],"cities":[{"l":"Victoria","r":32.3},{"l":"Ottawa","r":29.2},{"l":"Montreal","r":28.3},{"l":"Vancouver","r":27.9},{"l":"Toronto","r":24.5},{"l":"Quebec City","r":23.5}],"corr":[{"l":"Loan-to-income ratio","v":0.289},{"l":"Loan % of income","v":0.289},{"l":"Interest rate","v":0.315},{"l":"Debt-to-income ratio","v":0.256},{"l":"Loan amount","v":0.04},{"l":"Annual income (neg.)","v":0.279}]},"MEDICAL":{"kpi":{"total":1962,"dr":26.2,"dc":514,"inc":63,"lti":0.17,"prior":16.8,"label":"Canada \u00b7 Medical"},"grades":[{"l":"A","r":12.3,"c":"107C10"},{"l":"B","r":14.9,"c":"217346"},{"l":"C","r":20.7,"c":"C39A00"},{"l":"D","r":87.8,"c":"C43E1C"},{"l":"E","r":96.2,"c":"D13438"},{"l":"F","r":93.8,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Medical","r":26.2}],"ownership":[{"l":"Rent","n":1124,"r":31.3},{"l":"Mortgage","n":711,"r":21.5},{"l":"Own","n":124,"r":7.3},{"l":"Other","n":3,"r":0.0}],"rates":[{"l":"<8%","r":10.9},{"l":"8\u201311%","r":15.3},{"l":"11\u201314%","r":21.2},{"l":"14\u201317%","r":67.4},{"l":">17%","r":95.0}],"income":[{"l":"<$30K","r":44.3},{"l":"$30\u201350K","r":26.2},{"l":"$50\u201380K","r":25.3},{"l":"$80\u2013150K","r":11.7},{"l":">$150K","r":18.6}],"tiers":[{"l":"High Risk (0\u201340)","n":195,"r":91.8,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":180,"r":56.1,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":350,"r":39.1,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":1237,"r":7.8,"c":"107C10"}],"employment":[{"l":"Unemployed","r":30.3},{"l":"Self-employed","r":25.9},{"l":"Part-time","r":27.0},{"l":"Full-time","r":25.6}],"cities":[{"l":"Vancouver","r":28.5},{"l":"Montreal","r":27.0},{"l":"Toronto","r":26.9},{"l":"Quebec City","r":26.0},{"l":"Victoria","r":24.9},{"l":"Ottawa","r":24.0}],"corr":[{"l":"Loan-to-income ratio","v":0.442},{"l":"Loan % of income","v":0.414},{"l":"Interest rate","v":0.445},{"l":"Debt-to-income ratio","v":0.392},{"l":"Loan amount","v":0.197},{"l":"Annual income (neg.)","v":0.121}]},"DEBTCONSOLIDATION":{"kpi":{"total":1730,"dr":28.9,"dc":500,"inc":64,"lti":0.18,"prior":18.2,"label":"Canada \u00b7 Debt Consolidation"},"grades":[{"l":"A","r":11.4,"c":"107C10"},{"l":"B","r":21.4,"c":"217346"},{"l":"C","r":23.0,"c":"C39A00"},{"l":"D","r":92.6,"c":"C43E1C"},{"l":"E","r":100.0,"c":"D13438"},{"l":"F","r":100.0,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Debt Consolidation","r":28.9}],"ownership":[{"l":"Rent","n":935,"r":36.0},{"l":"Mortgage","n":766,"r":19.8},{"l":"Own","n":22,"r":36.4},{"l":"Other","n":7,"r":42.9}],"rates":[{"l":"<8%","r":11.0},{"l":"8\u201311%","r":18.8},{"l":"11\u201314%","r":23.1},{"l":"14\u201317%","r":74.3},{"l":">17%","r":100.0}],"income":[{"l":"<$30K","r":51.2},{"l":"$30\u201350K","r":34.0},{"l":"$50\u201380K","r":23.2},{"l":"$80\u2013150K","r":14.6},{"l":">$150K","r":28.0}],"tiers":[{"l":"High Risk (0\u201340)","n":164,"r":97.0,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":150,"r":66.7,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":349,"r":42.1,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":1067,"r":8.8,"c":"107C10"}],"employment":[{"l":"Unemployed","r":29.5},{"l":"Self-employed","r":27.1},{"l":"Part-time","r":32.1},{"l":"Full-time","r":28.3}],"cities":[{"l":"Vancouver","r":32.2},{"l":"Toronto","r":30.9},{"l":"Quebec City","r":28.4},{"l":"Montreal","r":27.9},{"l":"Ottawa","r":27.9},{"l":"Victoria","r":26.4}],"corr":[{"l":"Loan-to-income ratio","v":0.392},{"l":"Loan % of income","v":0.392},{"l":"Interest rate","v":0.447},{"l":"Debt-to-income ratio","v":0.321},{"l":"Loan amount","v":0.157},{"l":"Annual income (neg.)","v":0.163}]}}};
+const CROSS_OWN    = {"USA":{"OWN":{"kpi":{"total":840,"dr":8.1,"dc":68,"inc":58,"lti":0.19,"prior":17.4,"label":"USA \u00b7 Own"},"grades":[{"l":"A","r":9.1,"c":"107C10"},{"l":"B","r":3.2,"c":"217346"},{"l":"C","r":4.4,"c":"C39A00"},{"l":"D","r":9.6,"c":"C43E1C"},{"l":"E","r":54.2,"c":"D13438"},{"l":"F","r":60.0,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Education","r":4.1},{"l":"Venture","r":4.9},{"l":"Personal","r":7.2},{"l":"Home Improvement","r":10.5},{"l":"Medical","r":13.2},{"l":"Debt Consolidation","r":40.9}],"ownership":[{"l":"Own","n":840,"r":8.1}],"rates":[{"l":"<8%","r":9.8},{"l":"8\u201311%","r":2.6},{"l":"11\u201314%","r":3.2},{"l":"14\u201317%","r":13.6},{"l":">17%","r":41.7}],"income":[{"l":"<$30K","r":26.9},{"l":"$30\u201350K","r":0.4},{"l":"$50\u201380K","r":4.1},{"l":"$80\u2013150K","r":1.6},{"l":">$150K","r":0.0}],"tiers":[{"l":"High Risk (0\u201340)","n":48,"r":41.7,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":77,"r":11.7,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":135,"r":11.9,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":580,"r":4.0,"c":"107C10"}],"employment":[{"l":"Unemployed","r":9.1},{"l":"Self-employed","r":6.3},{"l":"Part-time","r":8.1},{"l":"Full-time","r":8.4}],"cities":[{"l":"Los Angeles","r":10.7},{"l":"Buffalo","r":8.6},{"l":"New York City","r":8.6},{"l":"San Francisco","r":8.1},{"l":"Dallas","r":7.9},{"l":"Houston","r":4.4}],"corr":[{"l":"Loan-to-income ratio","v":0.292},{"l":"Loan % of income","v":0.284},{"l":"Interest rate","v":0.099},{"l":"Debt-to-income ratio","v":0.227},{"l":"Loan amount","v":0.101},{"l":"Annual income (neg.)","v":0.205}]},"MORTGAGE":{"kpi":{"total":4488,"dr":12.8,"dc":574,"inc":82,"lti":0.15,"prior":14.8,"label":"USA \u00b7 Mortgage"},"grades":[{"l":"A","r":4.3,"c":"107C10"},{"l":"B","r":7.3,"c":"217346"},{"l":"C","r":17.6,"c":"C39A00"},{"l":"D","r":46.6,"c":"C43E1C"},{"l":"E","r":48.1,"c":"D13438"},{"l":"F","r":66.7,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Venture","r":5.6},{"l":"Personal","r":8.6},{"l":"Education","r":9.9},{"l":"Home Improvement","r":12.9},{"l":"Debt Consolidation","r":18.5},{"l":"Medical","r":22.1}],"ownership":[{"l":"Mortgage","n":4488,"r":12.8}],"rates":[{"l":"<8%","r":3.9},{"l":"8\u201311%","r":7.1},{"l":"11\u201314%","r":13.7},{"l":"14\u201317%","r":37.1},{"l":">17%","r":65.2}],"income":[{"l":"<$30K","r":28.6},{"l":"$30\u201350K","r":15.7},{"l":"$50\u201380K","r":13.6},{"l":"$80\u2013150K","r":8.5},{"l":">$150K","r":7.1}],"tiers":[{"l":"High Risk (0\u201340)","n":277,"r":55.2,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":270,"r":39.6,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":590,"r":21.4,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":3351,"r":5.6,"c":"107C10"}],"employment":[{"l":"Unemployed","r":16.7},{"l":"Self-employed","r":13.6},{"l":"Part-time","r":12.4},{"l":"Full-time","r":12.4}],"cities":[{"l":"San Francisco","r":14.4},{"l":"Los Angeles","r":13.2},{"l":"New York City","r":13.0},{"l":"Houston","r":12.9},{"l":"Buffalo","r":11.6},{"l":"Dallas","r":11.6}],"corr":[{"l":"Loan-to-income ratio","v":0.168},{"l":"Loan % of income","v":0.153},{"l":"Interest rate","v":0.353},{"l":"Debt-to-income ratio","v":0.131},{"l":"Loan amount","v":0.079},{"l":"Annual income (neg.)","v":0.052}]},"RENT":{"kpi":{"total":5491,"dr":31.3,"dc":1716,"inc":54,"lti":0.18,"prior":19.9,"label":"USA \u00b7 Rent"},"grades":[{"l":"A","r":17.2,"c":"107C10"},{"l":"B","r":22.7,"c":"217346"},{"l":"C","r":25.6,"c":"C39A00"},{"l":"D","r":74.5,"c":"C43E1C"},{"l":"E","r":76.2,"c":"D13438"},{"l":"F","r":91.4,"c":"A4262C"},{"l":"G","r":91.7,"c":"750B1C"}],"intents":[{"l":"Venture","r":25.7},{"l":"Education","r":26.0},{"l":"Medical","r":31.2},{"l":"Personal","r":31.2},{"l":"Debt Consolidation","r":35.9},{"l":"Home Improvement","r":43.0}],"ownership":[{"l":"Rent","n":5491,"r":31.3}],"rates":[{"l":"<8%","r":17.3},{"l":"8\u201311%","r":21.2},{"l":"11\u201314%","r":25.8},{"l":"14\u201317%","r":61.4},{"l":">17%","r":80.3}],"income":[{"l":"<$30K","r":51.8},{"l":"$30\u201350K","r":34.0},{"l":"$50\u201380K","r":23.1},{"l":"$80\u2013150K","r":13.5},{"l":">$150K","r":9.7}],"tiers":[{"l":"High Risk (0\u201340)","n":751,"r":80.0,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":602,"r":49.7,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":1218,"r":45.1,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":2920,"r":9.1,"c":"107C10"}],"employment":[{"l":"Unemployed","r":30.1},{"l":"Self-employed","r":32.1},{"l":"Part-time","r":32.9},{"l":"Full-time","r":30.6}],"cities":[{"l":"Dallas","r":35.2},{"l":"Los Angeles","r":32.5},{"l":"Buffalo","r":30.1},{"l":"San Francisco","r":30.1},{"l":"New York City","r":29.9},{"l":"Houston","r":29.5}],"corr":[{"l":"Loan-to-income ratio","v":0.506},{"l":"Loan % of income","v":0.502},{"l":"Interest rate","v":0.343},{"l":"Debt-to-income ratio","v":0.431},{"l":"Loan amount","v":0.227},{"l":"Annual income (neg.)","v":0.193}]},"OTHER":{"kpi":{"total":33,"dr":42.4,"dc":14,"inc":70,"lti":0.2,"prior":24.2,"label":"USA \u00b7 Other"},"grades":[{"l":"A","r":12.5,"c":"107C10"},{"l":"B","r":25.0,"c":"217346"},{"l":"C","r":50.0,"c":"C39A00"},{"l":"D","r":60.0,"c":"C43E1C"},{"l":"E","r":100.0,"c":"D13438"},{"l":"F","r":100.0,"c":"A4262C"}],"intents":[{"l":"Venture","r":0.0},{"l":"Education","r":50.0},{"l":"Home Improvement","r":50.0},{"l":"Medical","r":50.0},{"l":"Personal","r":50.0},{"l":"Debt Consolidation","r":80.0}],"ownership":[{"l":"Other","n":33,"r":42.4}],"rates":[{"l":"<8%","r":50.0},{"l":"8\u201311%","r":14.3},{"l":"11\u201314%","r":30.0},{"l":"14\u201317%","r":50.0},{"l":">17%","r":100.0}],"income":[{"l":"<$30K","r":80.0},{"l":"$30\u201350K","r":80.0},{"l":"$50\u201380K","r":30.8},{"l":"$80\u2013150K","r":11.1},{"l":">$150K","r":100.0}],"tiers":[{"l":"High Risk (0\u201340)","n":11,"r":81.8,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":3,"r":33.3,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":5,"r":60.0,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":14,"r":7.1,"c":"107C10"}],"employment":[{"l":"Unemployed","r":0.0},{"l":"Self-employed","r":50.0},{"l":"Part-time","r":50.0},{"l":"Full-time","r":45.0}],"cities":[],"corr":[{"l":"Loan-to-income ratio","v":0.64},{"l":"Loan % of income","v":0.624},{"l":"Interest rate","v":0.298},{"l":"Debt-to-income ratio","v":0.53},{"l":"Loan amount","v":0.255},{"l":"Annual income (neg.)","v":0.35}]}},"UK":{"OWN":{"kpi":{"total":879,"dr":8.2,"dc":72,"inc":57,"lti":0.19,"prior":17.6,"label":"UK \u00b7 Own"},"grades":[{"l":"A","r":8.1,"c":"107C10"},{"l":"B","r":5.1,"c":"217346"},{"l":"C","r":6.8,"c":"C39A00"},{"l":"D","r":6.0,"c":"C43E1C"},{"l":"E","r":64.7,"c":"D13438"},{"l":"F","r":50.0,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Venture","r":3.2},{"l":"Personal","r":6.8},{"l":"Education","r":7.9},{"l":"Medical","r":9.2},{"l":"Home Improvement","r":12.9},{"l":"Debt Consolidation","r":39.3}],"ownership":[{"l":"Own","n":879,"r":8.2}],"rates":[{"l":"<8%","r":7.6},{"l":"8\u201311%","r":6.7},{"l":"11\u201314%","r":5.2},{"l":"14\u201317%","r":8.7},{"l":">17%","r":47.6}],"income":[{"l":"<$30K","r":27.4},{"l":"$30\u201350K","r":1.1},{"l":"$50\u201380K","r":2.1},{"l":"$80\u2013150K","r":2.8},{"l":">$150K","r":0.0}],"tiers":[{"l":"High Risk (0\u201340)","n":57,"r":26.3,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":82,"r":14.6,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":135,"r":13.3,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":605,"r":4.5,"c":"107C10"}],"employment":[{"l":"Unemployed","r":8.5},{"l":"Self-employed","r":9.1},{"l":"Part-time","r":7.8},{"l":"Full-time","r":8.1}],"cities":[{"l":"Edinburgh","r":10.2},{"l":"Cardiff","r":10.2},{"l":"London","r":9.2},{"l":"Manchester","r":8.7},{"l":"Glasgow","r":7.2},{"l":"Swansea","r":3.8}],"corr":[{"l":"Loan-to-income ratio","v":0.295},{"l":"Loan % of income","v":0.295},{"l":"Interest rate","v":0.1},{"l":"Debt-to-income ratio","v":0.268},{"l":"Loan amount","v":0.117},{"l":"Annual income (neg.)","v":0.197}]},"MORTGAGE":{"kpi":{"total":4502,"dr":12.1,"dc":546,"inc":80,"lti":0.15,"prior":14.6,"label":"UK \u00b7 Mortgage"},"grades":[{"l":"A","r":4.2,"c":"107C10"},{"l":"B","r":8.0,"c":"217346"},{"l":"C","r":11.4,"c":"C39A00"},{"l":"D","r":47.6,"c":"C43E1C"},{"l":"E","r":45.8,"c":"D13438"},{"l":"F","r":61.8,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Venture","r":3.8},{"l":"Education","r":7.0},{"l":"Personal","r":9.1},{"l":"Home Improvement","r":12.7},{"l":"Debt Consolidation","r":19.8},{"l":"Medical","r":20.9}],"ownership":[{"l":"Mortgage","n":4502,"r":12.1}],"rates":[{"l":"<8%","r":3.9},{"l":"8\u201311%","r":6.8},{"l":"11\u201314%","r":10.0},{"l":"14\u201317%","r":40.0},{"l":">17%","r":56.7}],"income":[{"l":"<$30K","r":28.4},{"l":"$30\u201350K","r":15.2},{"l":"$50\u201380K","r":12.6},{"l":"$80\u2013150K","r":7.2},{"l":">$150K","r":10.5}],"tiers":[{"l":"High Risk (0\u201340)","n":274,"r":57.7,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":288,"r":35.1,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":563,"r":16.0,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":3377,"r":5.8,"c":"107C10"}],"employment":[{"l":"Unemployed","r":11.7},{"l":"Self-employed","r":14.5},{"l":"Part-time","r":11.5},{"l":"Full-time","r":11.8}],"cities":[{"l":"London","r":12.8},{"l":"Cardiff","r":12.6},{"l":"Edinburgh","r":12.6},{"l":"Swansea","r":12.5},{"l":"Manchester","r":11.3},{"l":"Glasgow","r":10.9}],"corr":[{"l":"Loan-to-income ratio","v":0.13},{"l":"Loan % of income","v":0.116},{"l":"Interest rate","v":0.341},{"l":"Debt-to-income ratio","v":0.092},{"l":"Loan amount","v":0.029},{"l":"Annual income (neg.)","v":0.076}]},"RENT":{"kpi":{"total":5524,"dr":31.7,"dc":1749,"inc":56,"lti":0.18,"prior":19.7,"label":"UK \u00b7 Rent"},"grades":[{"l":"A","r":18.0,"c":"107C10"},{"l":"B","r":24.6,"c":"217346"},{"l":"C","r":26.3,"c":"C39A00"},{"l":"D","r":74.3,"c":"C43E1C"},{"l":"E","r":76.3,"c":"D13438"},{"l":"F","r":73.6,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Education","r":25.5},{"l":"Venture","r":28.7},{"l":"Personal","r":30.3},{"l":"Medical","r":33.6},{"l":"Debt Consolidation","r":35.4},{"l":"Home Improvement","r":41.4}],"ownership":[{"l":"Rent","n":5524,"r":31.7}],"rates":[{"l":"<8%","r":16.9},{"l":"8\u201311%","r":24.0},{"l":"11\u201314%","r":25.9},{"l":"14\u201317%","r":62.3},{"l":">17%","r":74.7}],"income":[{"l":"<$30K","r":52.6},{"l":"$30\u201350K","r":33.6},{"l":"$50\u201380K","r":24.3},{"l":"$80\u2013150K","r":14.4},{"l":">$150K","r":12.0}],"tiers":[{"l":"High Risk (0\u201340)","n":693,"r":79.7,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":618,"r":49.5,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":1256,"r":46.5,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":2957,"r":10.4,"c":"107C10"}],"employment":[{"l":"Unemployed","r":31.0},{"l":"Self-employed","r":29.9},{"l":"Part-time","r":31.2},{"l":"Full-time","r":32.3}],"cities":[{"l":"Edinburgh","r":34.4},{"l":"Manchester","r":33.4},{"l":"Glasgow","r":31.9},{"l":"Cardiff","r":30.3},{"l":"London","r":30.3},{"l":"Swansea","r":29.7}],"corr":[{"l":"Loan-to-income ratio","v":0.51},{"l":"Loan % of income","v":0.506},{"l":"Interest rate","v":0.327},{"l":"Debt-to-income ratio","v":0.42},{"l":"Loan amount","v":0.224},{"l":"Annual income (neg.)","v":0.162}]},"OTHER":{"kpi":{"total":39,"dr":28.2,"dc":11,"inc":57,"lti":0.19,"prior":28.2,"label":"UK \u00b7 Other"},"grades":[{"l":"A","r":8.3,"c":"107C10"},{"l":"B","r":7.1,"c":"217346"},{"l":"C","r":42.9,"c":"C39A00"},{"l":"D","r":100.0,"c":"C43E1C"},{"l":"E","r":100.0,"c":"D13438"},{"l":"F","r":100.0,"c":"A4262C"}],"intents":[{"l":"Venture","r":11.1},{"l":"Home Improvement","r":16.7},{"l":"Debt Consolidation","r":20.0},{"l":"Personal","r":25.0},{"l":"Education","r":42.9},{"l":"Medical","r":50.0}],"ownership":[{"l":"Other","n":39,"r":28.2}],"rates":[{"l":"<8%","r":0.0},{"l":"8\u201311%","r":33.3},{"l":"11\u201314%","r":17.6},{"l":"14\u201317%","r":100.0},{"l":">17%","r":100.0}],"income":[{"l":"<$30K","r":66.7},{"l":"$30\u201350K","r":21.4},{"l":"$50\u201380K","r":30.0},{"l":"$80\u2013150K","r":12.5},{"l":">$150K","r":0.0}],"tiers":[{"l":"High Risk (0\u201340)","n":8,"r":100.0,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":3,"r":33.3,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":5,"r":40.0,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":23,"r":0.0,"c":"107C10"}],"employment":[{"l":"Unemployed","r":50.0},{"l":"Self-employed","r":20.0},{"l":"Part-time","r":44.4},{"l":"Full-time","r":21.7}],"cities":[],"corr":[{"l":"Loan-to-income ratio","v":0.648},{"l":"Loan % of income","v":0.628},{"l":"Interest rate","v":0.571},{"l":"Debt-to-income ratio","v":0.531},{"l":"Loan amount","v":0.26},{"l":"Annual income (neg.)","v":0.299}]}},"Canada":{"OWN":{"kpi":{"total":865,"dr":6.1,"dc":53,"inc":59,"lti":0.19,"prior":16.5,"label":"Canada \u00b7 Own"},"grades":[{"l":"A","r":4.2,"c":"107C10"},{"l":"B","r":4.3,"c":"217346"},{"l":"C","r":7.9,"c":"C39A00"},{"l":"D","r":4.0,"c":"C43E1C"},{"l":"E","r":43.8,"c":"D13438"},{"l":"F","r":50.0,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Venture","r":3.7},{"l":"Education","r":4.8},{"l":"Personal","r":5.0},{"l":"Medical","r":7.3},{"l":"Home Improvement","r":8.4},{"l":"Debt Consolidation","r":36.4}],"ownership":[{"l":"Own","n":865,"r":6.1}],"rates":[{"l":"<8%","r":4.0},{"l":"8\u201311%","r":4.9},{"l":"11\u201314%","r":4.9},{"l":"14\u201317%","r":6.2},{"l":">17%","r":52.9}],"income":[{"l":"<$30K","r":21.1},{"l":"$30\u201350K","r":1.4},{"l":"$50\u201380K","r":1.8},{"l":"$80\u2013150K","r":0.0},{"l":">$150K","r":2.9}],"tiers":[{"l":"High Risk (0\u201340)","n":53,"r":26.4,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":71,"r":11.3,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":149,"r":7.4,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":592,"r":3.4,"c":"107C10"}],"employment":[{"l":"Unemployed","r":4.9},{"l":"Self-employed","r":4.9},{"l":"Part-time","r":5.2},{"l":"Full-time","r":6.9}],"cities":[{"l":"Quebec City","r":8.3},{"l":"Ottawa","r":7.4},{"l":"Toronto","r":7.0},{"l":"Montreal","r":5.5},{"l":"Vancouver","r":4.9},{"l":"Victoria","r":3.9}],"corr":[{"l":"Loan-to-income ratio","v":0.212},{"l":"Loan % of income","v":0.211},{"l":"Interest rate","v":0.158},{"l":"Debt-to-income ratio","v":0.188},{"l":"Loan amount","v":0.098},{"l":"Annual income (neg.)","v":0.127}]},"MORTGAGE":{"kpi":{"total":4454,"dr":12.8,"dc":570,"inc":81,"lti":0.15,"prior":15.1,"label":"Canada \u00b7 Mortgage"},"grades":[{"l":"A","r":4.7,"c":"107C10"},{"l":"B","r":8.7,"c":"217346"},{"l":"C","r":13.8,"c":"C39A00"},{"l":"D","r":43.1,"c":"C43E1C"},{"l":"E","r":48.7,"c":"D13438"},{"l":"F","r":60.6,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Venture","r":4.5},{"l":"Education","r":7.7},{"l":"Personal","r":9.5},{"l":"Home Improvement","r":15.7},{"l":"Debt Consolidation","r":19.8},{"l":"Medical","r":21.5}],"ownership":[{"l":"Mortgage","n":4454,"r":12.8}],"rates":[{"l":"<8%","r":3.9},{"l":"8\u201311%","r":8.9},{"l":"11\u201314%","r":11.5},{"l":"14\u201317%","r":36.0},{"l":">17%","r":55.8}],"income":[{"l":"<$30K","r":26.9},{"l":"$30\u201350K","r":15.0},{"l":"$50\u201380K","r":14.0},{"l":"$80\u2013150K","r":7.8},{"l":">$150K","r":10.9}],"tiers":[{"l":"High Risk (0\u201340)","n":265,"r":53.2,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":302,"r":36.4,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":588,"r":17.9,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":3299,"r":6.5,"c":"107C10"}],"employment":[{"l":"Unemployed","r":15.5},{"l":"Self-employed","r":13.2},{"l":"Part-time","r":13.0},{"l":"Full-time","r":12.4}],"cities":[{"l":"Vancouver","r":17.0},{"l":"Ottawa","r":12.9},{"l":"Montreal","r":12.9},{"l":"Toronto","r":12.4},{"l":"Victoria","r":10.9},{"l":"Quebec City","r":10.6}],"corr":[{"l":"Loan-to-income ratio","v":0.138},{"l":"Loan % of income","v":0.124},{"l":"Interest rate","v":0.328},{"l":"Debt-to-income ratio","v":0.116},{"l":"Loan amount","v":0.054},{"l":"Annual income (neg.)","v":0.061}]},"RENT":{"kpi":{"total":5431,"dr":31.8,"dc":1727,"inc":55,"lti":0.18,"prior":20.1,"label":"Canada \u00b7 Rent"},"grades":[{"l":"A","r":17.4,"c":"107C10"},{"l":"B","r":24.9,"c":"217346"},{"l":"C","r":27.9,"c":"C39A00"},{"l":"D","r":72.5,"c":"C43E1C"},{"l":"E","r":74.0,"c":"D13438"},{"l":"F","r":71.8,"c":"A4262C"},{"l":"G","r":100.0,"c":"750B1C"}],"intents":[{"l":"Venture","r":25.4},{"l":"Education","r":27.1},{"l":"Medical","r":31.3},{"l":"Personal","r":32.3},{"l":"Debt Consolidation","r":36.0},{"l":"Home Improvement","r":45.7}],"ownership":[{"l":"Rent","n":5431,"r":31.8}],"rates":[{"l":"<8%","r":17.1},{"l":"8\u201311%","r":23.4},{"l":"11\u201314%","r":28.7},{"l":"14\u201317%","r":60.4},{"l":">17%","r":73.5}],"income":[{"l":"<$30K","r":54.6},{"l":"$30\u201350K","r":34.4},{"l":"$50\u201380K","r":22.5},{"l":"$80\u2013150K","r":12.9},{"l":">$150K","r":19.0}],"tiers":[{"l":"High Risk (0\u201340)","n":704,"r":79.0,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":634,"r":47.0,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":1187,"r":49.2,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":2906,"r":9.9,"c":"107C10"}],"employment":[{"l":"Unemployed","r":34.6},{"l":"Self-employed","r":32.7},{"l":"Part-time","r":31.9},{"l":"Full-time","r":31.3}],"cities":[{"l":"Vancouver","r":32.8},{"l":"Toronto","r":32.5},{"l":"Montreal","r":32.3},{"l":"Victoria","r":31.8},{"l":"Ottawa","r":31.2},{"l":"Quebec City","r":30.2}],"corr":[{"l":"Loan-to-income ratio","v":0.515},{"l":"Loan % of income","v":0.512},{"l":"Interest rate","v":0.319},{"l":"Debt-to-income ratio","v":0.444},{"l":"Loan amount","v":0.214},{"l":"Annual income (neg.)","v":0.229}]},"OTHER":{"kpi":{"total":35,"dr":22.9,"dc":8,"inc":104,"lti":0.18,"prior":28.6,"label":"Canada \u00b7 Other"},"grades":[{"l":"A","r":16.7,"c":"107C10"},{"l":"B","r":16.7,"c":"217346"},{"l":"C","r":16.7,"c":"C39A00"},{"l":"D","r":16.7,"c":"C43E1C"},{"l":"E","r":60.0,"c":"D13438"}],"intents":[{"l":"Medical","r":0.0},{"l":"Venture","r":0.0},{"l":"Education","r":16.7},{"l":"Home Improvement","r":25.0},{"l":"Debt Consolidation","r":42.9},{"l":"Personal","r":50.0}],"ownership":[{"l":"Other","n":35,"r":22.9}],"rates":[{"l":"<8%","r":0.0},{"l":"8\u201311%","r":20.0},{"l":"11\u201314%","r":16.7},{"l":"14\u201317%","r":33.3}],"income":[{"l":"<$30K","r":0.0},{"l":"$30\u201350K","r":50.0},{"l":"$50\u201380K","r":20.0},{"l":"$80\u2013150K","r":0.0},{"l":">$150K","r":0.0}],"tiers":[{"l":"High Risk (0\u201340)","n":9,"r":33.3,"c":"D13438"},{"l":"Medium Risk (41\u201360)","n":6,"r":33.3,"c":"C39A00"},{"l":"Low Risk (61\u201380)","n":6,"r":33.3,"c":"0078D4"},{"l":"Very Low Risk (81\u2013100)","n":14,"r":7.1,"c":"107C10"}],"employment":[{"l":"Unemployed","r":33.3},{"l":"Self-employed","r":0.0},{"l":"Part-time","r":33.3},{"l":"Full-time","r":20.0}],"cities":[],"corr":[{"l":"Loan-to-income ratio","v":0.699},{"l":"Loan % of income","v":0.694},{"l":"Interest rate","v":0.254},{"l":"Debt-to-income ratio","v":0.544},{"l":"Loan amount","v":0.276},{"l":"Annual income (neg.)","v":0.234}]}}};
+
+function applyFilters() {
+  const country   = document.getElementById("f-country").value;
+  const grade     = document.getElementById("f-grade").value;
+  const intent    = document.getElementById("f-intent").value;
+  const ownership = document.getElementById("f-ownership").value;
+  const active    = country!=="all"||grade!=="all"||intent!=="all"||ownership!=="all";
+
+  document.getElementById("fbar").classList.toggle("active", active);
+
+  // Country + intent combination
+  if (intent !== "all" && country !== "all") {
+    const seg = CROSS_INTENT[country] && CROSS_INTENT[country][intent];
+    if (seg) { renderAll(seg, seg.kpi); return; }
+  }
+  // Country + ownership combination
+  if (ownership !== "all" && country !== "all") {
+    const seg = CROSS_OWN[country] && CROSS_OWN[country][ownership];
+    if (seg) { renderAll(seg, seg.kpi); return; }
+  }
+  // Intent alone
+  if (intent !== "all") {
+    const seg = INTENT_DATA[intent];
+    if (seg) { renderAll(seg, seg.kpi); return; }
+  }
+  // Ownership alone
+  if (ownership !== "all") {
+    const seg = OWN_DATA[ownership];
+    if (seg) { renderAll(seg, seg.kpi); return; }
+  }
+
+  // Country + grade
+  let base = DB[country] || DB.all;
+  let d    = Object.assign({}, base);
+  let k    = Object.assign({}, base.kpi);
+
+  if (grade !== "all") {
+    const gk = GRADE_KPI[grade];
+    k = { total:gk.total, dr:gk.dr, dc:gk.dc, inc:gk.inc, lti:gk.lti, prior:gk.prior,
+          label:"Grade "+grade+" segment" };
+    d = Object.assign({}, d, { grades: base.grades.filter(g=>g.l===grade) });
+  }
+
+  renderAll(d, k);
+}
+
+function resetFilters() {
+  ["f-country","f-grade","f-intent","f-ownership"].forEach(id=>
+    document.getElementById(id).value="all");
+  document.getElementById("fbar").classList.remove("active");
+  renderAll(DB.all, DB.all.kpi);
+}
+
+window.addEventListener("load", ()=>renderAll(DB.all, DB.all.kpi));
+</script>
+</body>
+</html>
